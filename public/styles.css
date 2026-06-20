@@ -525,6 +525,7 @@ h2 {
 .state-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 21px;
   max-width: 100%;
   padding: 0 8px;
@@ -532,6 +533,8 @@ h2 {
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.74rem;
+  line-height: 1;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -576,6 +579,10 @@ h2 {
   margin-top: 3px;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.control-heading .state-pill {
+  display: inline-flex;
 }
 
 .state-pill.ok {
@@ -623,6 +630,9 @@ h2 {
 }
 
 .pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   max-width: 120px;
   overflow: hidden;
@@ -631,6 +641,8 @@ h2 {
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.75rem;
+  line-height: 1;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -681,11 +693,16 @@ h2 {
 .actions button,
 .scene-item button,
 .control-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
+  line-height: 1;
+  text-align: center;
 }
 
 .actions button,
@@ -702,7 +719,7 @@ h2 {
   font-weight: 600;
 }
 
-/* 現在の状態と一致するボタンだけ緑に点灯。 */
+/* 現在の状態と一致するボタンだけ赤に点灯。 */
 .actions button.active,
 .control-actions button.active {
   border-color: rgba(230, 0, 18, 0.3);
@@ -823,12 +840,17 @@ details pre {
 }
 
 .remote-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
+  line-height: 1;
+  text-align: center;
 }
 
 .remote-actions button.primary {
