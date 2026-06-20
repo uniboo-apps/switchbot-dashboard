@@ -188,6 +188,112 @@ h2 {
   font-weight: 600;
 }
 
+.settings-overlay {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(24, 33, 43, 0.28);
+}
+
+.settings-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(760px, 100%);
+  max-height: min(820px, calc(100dvh - 36px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.settings-head,
+.settings-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-foot {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.settings-foot button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.settings-body {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.settings-group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-group h3 {
+  font-size: 0.95rem;
+}
+
+.settings-subgroup {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+}
+
+.settings-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+}
+
+.settings-check strong {
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.settings-check span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .setup-panel,
 .login-panel,
 .device-card {
@@ -850,6 +956,43 @@ body.reorder-mode .scene-item .order-controls {
     width: 100%;
     gap: 6px;
     justify-content: flex-end;
+  }
+
+  .settings-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .settings-sheet {
+    width: 100%;
+    max-height: 88dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .settings-head,
+  .settings-foot,
+  .settings-body {
+    padding: 10px;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-check {
+    min-height: 34px;
+    padding: 6px 7px;
+  }
+
+  .settings-check strong {
+    font-size: 0.78rem;
+  }
+
+  .settings-check span {
+    font-size: 0.64rem;
   }
 
   .icon-button {

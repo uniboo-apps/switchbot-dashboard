@@ -1,3 +1,5 @@
+const SETTINGS_STORAGE_KEY = "switchbotDashboard.settings.v1";
+
 const state = {
   configured: false,
   authRequired: false,
@@ -5,6 +7,7 @@ const state = {
   snapshot: null,
   filter: "all",
   reorderMode: false,
+  settings: loadSettings(),
   orders: loadOrders(),
   dragItem: null,
   autoRefreshSeconds: 300,
@@ -24,6 +27,11 @@ const elements = {
   refreshButton: document.querySelector("#refreshButton"),
   menuButton: document.querySelector("#menuButton"),
   menu: document.querySelector("#menu"),
+  settingsButton: document.querySelector("#settingsButton"),
+  settingsOverlay: document.querySelector("#settingsOverlay"),
+  settingsCloseButton: document.querySelector("#settingsCloseButton"),
+  settingsResetButton: document.querySelector("#settingsResetButton"),
+  settingsBody: document.querySelector("#settingsBody"),
   logoutButton: document.querySelector("#logoutButton"),
   autoRefreshToggle: document.querySelector("#autoRefreshToggle"),
   stateDot: document.querySelector("#stateDot"),
@@ -100,20 +108,25 @@ const irRewind = { label: "巻戻し", command: "Rewind" };
 const irPlay = { label: "再生", command: "Play" };
 const irPause = { label: "停止", command: "Pause" };
 
-const airconCommands = [
-  irOff,
-  { label: "冷房24", command: "setAll", parameter: "24,2,1,on" },
-  { label: "冷房26", command: "setAll", parameter: "26,2,1,on" },
-  { label: "冷房28", command: "setAll", parameter: "28,2,1,on" },
-  { label: "暖房20", command: "setAll", parameter: "20,5,1,on" },
-  { label: "暖房22", command: "setAll", parameter: "22,5,1,on" },
-  { label: "暖房24", command: "setAll", parameter: "24,5,1,on" },
-  { label: "除湿26", command: "setAll", parameter: "26,3,1,on" },
-  { label: "送風", command: "setAll", parameter: "26,4,1,on" }
+const airconPresets = [
+  { id: "off", label: "OFF", command: "turnOff" },
+  { id: "cool24", label: "冷房24", command: "setAll", parameter: "24,2,1,on" },
+  { id: "cool26", label: "冷房26", command: "setAll", parameter: "26,2,1,on" },
+  { id: "cool265", label: "冷房26.5", command: "setAll", parameter: "26.5,2,1,on" },
+  { id: "cool27", label: "冷房27", command: "setAll", parameter: "27,2,1,on" },
+  { id: "cool275", label: "冷房27.5", command: "setAll", parameter: "27.5,2,1,on" },
+  { id: "cool28", label: "冷房28", command: "setAll", parameter: "28,2,1,on" },
+  { id: "heat20", label: "暖房20", command: "setAll", parameter: "20,5,1,on" },
+  { id: "heat22", label: "暖房22", command: "setAll", parameter: "22,5,1,on" },
+  { id: "heat24", label: "暖房24", command: "setAll", parameter: "24,5,1,on" },
+  { id: "dry26", label: "除湿26", command: "setAll", parameter: "26,3,1,on" },
+  { id: "fan", label: "送風", command: "setAll", parameter: "26,4,1,on" }
 ];
 
+const airconPresetMap = new Map(airconPresets.map((preset) => [preset.id, preset]));
+
 const remoteCommands = new Map([
-  ["Air Conditioner", airconCommands],
+  ["Air Conditioner", airconPresets],
   ["TV", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown, irMute]],
   ["IPTV/Streamer", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
   ["Set Top Box", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
@@ -130,8 +143,42 @@ const remoteCommands = new Map([
 ]);
 
 function getRemoteCommands(remote) {
-  const type = String(remote.remoteType || "").replace(/^DIY\s+/i, "").trim();
+  const type = cleanRemoteType(remote);
+  if (type === "Air Conditioner") {
+    return getAirconCommands(remote);
+  }
   return remoteCommands.get(type) || [irOn, irOff];
+}
+
+function cleanRemoteType(remote) {
+  return String(remote.remoteType || "").replace(/^DIY\s+/i, "").trim();
+}
+
+function getAirconCommands(remote) {
+  return getAirconPresetIds(remote)
+    .map((id) => airconPresetMap.get(id))
+    .filter(Boolean)
+    .map(({ label, command, parameter }) => ({ label, command, parameter }));
+}
+
+function getAirconPresetIds(remote) {
+  const id = getRemoteId(remote);
+  const configured = state.settings.airconPresets[id];
+  if (Array.isArray(configured)) {
+    return configured.filter((presetId) => airconPresetMap.has(presetId));
+  }
+  return defaultAirconPresetIds(remote);
+}
+
+function defaultAirconPresetIds(remote) {
+  const name = normalizeName(remote);
+  if (name.includes("リビング") || name.includes("living")) {
+    return ["off", "cool26", "cool27"];
+  }
+  if (name.includes("寝室") || name.includes("bedroom")) {
+    return ["off", "cool265", "cool27", "cool275"];
+  }
+  return ["off", "cool26", "cool27", "cool28", "heat22", "dry26"];
 }
 
 const stateLabels = new Map([
@@ -208,9 +255,18 @@ function bindEvents() {
   elements.refreshButton.addEventListener("click", () => refreshSnapshot());
   elements.autoRefreshToggle.addEventListener("change", scheduleRefresh);
   elements.menuButton.addEventListener("click", toggleMenu);
+  elements.settingsButton.addEventListener("click", openSettings);
+  elements.settingsCloseButton.addEventListener("click", closeSettings);
+  elements.settingsResetButton.addEventListener("click", resetSettings);
+  elements.settingsOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.settingsOverlay) {
+      closeSettings();
+    }
+  });
   document.addEventListener("click", handleOutsideMenuClick);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      closeSettings();
       closeMenu();
     }
   });
@@ -302,6 +358,135 @@ function handleOutsideMenuClick(event) {
   if (!event.target.closest(".kebab")) {
     closeMenu();
   }
+}
+
+function openSettings() {
+  closeMenu();
+  renderSettings();
+  elements.settingsOverlay.classList.remove("hidden");
+}
+
+function closeSettings() {
+  elements.settingsOverlay.classList.add("hidden");
+}
+
+function resetSettings() {
+  state.settings = createEmptySettings();
+  saveSettings();
+  renderSettings();
+  if (state.snapshot) {
+    renderAll();
+  }
+  addLog("表示設定を初期化しました");
+}
+
+function renderSettings() {
+  elements.settingsBody.replaceChildren();
+
+  if (!state.snapshot) {
+    elements.settingsBody.append(emptyMessage("データ取得後に設定できます"));
+    return;
+  }
+
+  elements.settingsBody.append(
+    settingsVisibilitySection("devices", "デバイス", getPhysicalDevices(), getDeviceId),
+    settingsVisibilitySection("remotes", "リモコン", getRemoteDevices(), getRemoteId),
+    settingsVisibilitySection("scenes", "シーン", getScenes(), getSceneId)
+  );
+
+  const airconSection = settingsAirconSection();
+  if (airconSection) {
+    elements.settingsBody.prepend(airconSection);
+  }
+}
+
+function settingsVisibilitySection(kind, title, items, getId) {
+  const section = document.createElement("section");
+  section.className = "settings-group";
+
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  section.append(heading);
+
+  if (!items.length) {
+    section.append(emptyMessage("なし"));
+    return section;
+  }
+
+  for (const item of items) {
+    const id = getId(item);
+    const label = getItemName(item);
+    const row = settingsCheckbox(label, isVisibleItem(kind, id, label));
+    const meta = document.createElement("span");
+    meta.textContent = item.deviceType || item.remoteType || "";
+    row.append(meta);
+    row.querySelector("input").addEventListener("change", (event) => {
+      setVisibility(kind, id, event.currentTarget.checked);
+    });
+    section.append(row);
+  }
+
+  return section;
+}
+
+function settingsAirconSection() {
+  const aircons = getRemoteDevices().filter((remote) => cleanRemoteType(remote) === "Air Conditioner");
+  if (!aircons.length) {
+    return null;
+  }
+
+  const section = document.createElement("section");
+  section.className = "settings-group aircon-settings";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "エアコン";
+  section.append(heading);
+
+  for (const remote of aircons) {
+    const id = getRemoteId(remote);
+    const selected = new Set(getAirconPresetIds(remote));
+    const block = document.createElement("div");
+    block.className = "settings-subgroup";
+
+    const title = document.createElement("strong");
+    title.textContent = getItemName(remote);
+    block.append(title);
+
+    const grid = document.createElement("div");
+    grid.className = "preset-grid";
+
+    for (const preset of airconPresets) {
+      const row = settingsCheckbox(preset.label, selected.has(preset.id));
+      row.querySelector("input").dataset.presetId = preset.id;
+      row.querySelector("input").addEventListener("change", () => {
+        const ids = [...grid.querySelectorAll("input:checked")].map((input) => input.dataset.presetId);
+        state.settings.airconPresets[id] = ids;
+        saveSettings();
+        renderAll();
+      });
+      grid.append(row);
+    }
+
+    block.append(grid);
+    section.append(block);
+  }
+
+  return section;
+}
+
+function settingsCheckbox(labelText, checked) {
+  const label = document.createElement("label");
+  label.className = "settings-check";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+
+  const text = document.createElement("strong");
+  text.textContent = labelText;
+
+  label.append(input, text);
+  return label;
 }
 
 function resetOrders() {
@@ -557,6 +742,7 @@ function renderSensorHighlights() {
   elements.sensorHighlights.replaceChildren();
   const sensors = getPhysicalDevices()
     .filter((device) => sensorTypes.has(device.deviceType))
+    .filter((device) => isVisibleItem("devices", getDeviceId(device), getItemName(device)))
     .map((device) => ({ device, status: getStatusForDevice(device.deviceId) }))
     .sort((left, right) => compareOrderedItems("devices", left.device, right.device, getDeviceId, sensorSortScore));
 
@@ -624,6 +810,7 @@ function renderControls() {
   elements.controlList.replaceChildren();
   const controls = getPhysicalDevices()
     .filter((device) => controlCommands.has(device.deviceType))
+    .filter((device) => isVisibleItem("devices", getDeviceId(device), getItemName(device)))
     .sort((left, right) => compareOrderedItems("devices", left, right, getDeviceId, controlSortScore));
 
   if (!controls.length) {
@@ -754,7 +941,8 @@ function appendCommandButtons(device, actions, status) {
 
 function renderScenes() {
   elements.sceneList.replaceChildren();
-  const scenes = orderItemsPreservingInput(getScenes(), "scenes", getSceneId);
+  const scenes = orderItemsPreservingInput(getScenes(), "scenes", getSceneId)
+    .filter((scene) => isVisibleItem("scenes", getSceneId(scene), getItemName(scene)));
 
   if (!scenes.length) {
     elements.sceneList.append(emptyMessage("シーンがありません"));
@@ -786,7 +974,8 @@ function renderScenes() {
 
 function renderRemotes() {
   elements.remoteList.replaceChildren();
-  const remotes = orderItemsPreservingInput(getRemoteDevices(), "remotes", getRemoteId);
+  const remotes = orderItemsPreservingInput(getRemoteDevices(), "remotes", getRemoteId)
+    .filter((remote) => isVisibleItem("remotes", getRemoteId(remote), getItemName(remote)));
 
   if (!remotes.length) {
     elements.remoteList.append(emptyMessage("赤外線リモコンがありません"));
@@ -1017,7 +1206,8 @@ function valueTile(label, value) {
 }
 
 function getFilteredDevices() {
-  const devices = getPhysicalDevices();
+  const devices = getPhysicalDevices()
+    .filter((device) => isVisibleItem("devices", getDeviceId(device), getItemName(device)));
   if (state.filter === "sensor") {
     return devices
       .filter((device) => sensorTypes.has(device.deviceType))
@@ -1251,7 +1441,11 @@ function nameScore(device) {
 }
 
 function normalizeName(device) {
-  return String(device.deviceName || device.remoteName || device.deviceId || "").toLowerCase();
+  return getItemName(device).toLowerCase();
+}
+
+function getItemName(item) {
+  return String(item.deviceName || item.remoteName || item.sceneName || item.deviceId || item.sceneId || "");
 }
 
 function getDeviceId(device) {
@@ -1289,6 +1483,67 @@ function loadOrders() {
 
 function saveOrders() {
   localStorage.setItem("switchbotDashboard.order.v1", JSON.stringify(state.orders));
+}
+
+function createEmptySettings() {
+  return {
+    visibility: {
+      devices: {},
+      remotes: {},
+      scenes: {}
+    },
+    airconPresets: {}
+  };
+}
+
+function loadSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "null");
+    const defaults = createEmptySettings();
+    return {
+      ...defaults,
+      ...(parsed && typeof parsed === "object" ? parsed : {}),
+      visibility: {
+        ...defaults.visibility,
+        ...(parsed?.visibility && typeof parsed.visibility === "object" ? parsed.visibility : {})
+      },
+      airconPresets: parsed?.airconPresets && typeof parsed.airconPresets === "object"
+        ? parsed.airconPresets
+        : {}
+    };
+  } catch {
+    return createEmptySettings();
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings));
+}
+
+function setVisibility(kind, id, visible) {
+  state.settings.visibility[kind][id] = visible;
+  saveSettings();
+  if (state.snapshot) {
+    renderAll();
+  }
+}
+
+function isVisibleItem(kind, id, name) {
+  const value = state.settings.visibility[kind]?.[id];
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return !isDefaultHiddenName(name);
+}
+
+function isDefaultHiddenName(name) {
+  const normalized = String(name || "").toLowerCase();
+  return normalized.includes("内部洗浄")
+    || normalized.includes("内部清掃")
+    || normalized.includes("internal clean")
+    || normalized.includes("self clean")
+    || normalized.includes("サーキュレーター")
+    || normalized.includes("circulator");
 }
 
 function getDeviceInitial(device) {

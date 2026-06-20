@@ -48,6 +48,7 @@
                 <input id="autoRefreshToggle" type="checkbox" checked>
                 <span>自動更新</span>
               </label>
+              <button id="settingsButton" class="menu-item" type="button" role="menuitem">表示設定</button>
               <button id="logoutButton" class="menu-item hidden" type="button" role="menuitem">ログアウト</button>
             </div>
           </div>
@@ -147,6 +148,24 @@ npm start</pre>
           </section>
         </div>
       </main>
+    </div>
+
+    <div id="settingsOverlay" class="settings-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <section class="settings-sheet">
+        <div class="settings-head">
+          <div>
+            <p class="section-kicker">Settings</p>
+            <h2 id="settingsTitle">表示設定</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-button" type="button" title="閉じる" aria-label="閉じる">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div id="settingsBody" class="settings-body"></div>
+        <div class="settings-foot">
+          <button id="settingsResetButton" type="button">初期化</button>
+        </div>
+      </section>
     </div>
 
     <template id="deviceCardTemplate">
