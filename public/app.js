@@ -1011,10 +1011,7 @@ function renderRemoteCard(remote) {
   const name = document.createElement("strong");
   name.textContent = remote.deviceName || remote.remoteName || remote.deviceId;
 
-  const type = document.createElement("span");
-  type.textContent = remote.remoteType || "Remote";
-
-  heading.append(name, type);
+  heading.append(name);
 
   const actions = document.createElement("div");
   actions.className = "remote-actions";
