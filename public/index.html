@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SwitchBot Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SwitchBot API v1.1</p>
+          <h1>SwitchBot Dashboard</h1>
+        </div>
+        <div class="toolbar">
+          <button id="refreshButton" class="icon-button" type="button" title="更新" aria-label="更新">
+            <span aria-hidden="true">↻</span>
+          </button>
+          <button id="logoutButton" class="icon-button hidden" type="button" title="ログアウト" aria-label="ログアウト">
+            <span aria-hidden="true">⎋</span>
+          </button>
+          <label class="toggle">
+            <input id="autoRefreshToggle" type="checkbox" checked>
+            <span>自動更新</span>
+          </label>
+        </div>
+      </header>
+
+      <main>
+        <section id="loginPanel" class="login-panel hidden" aria-live="polite">
+          <form id="loginForm" class="login-form">
+            <div>
+              <h2>ログイン</h2>
+              <p>SwitchBot Dashboard のパスワードを入力してください。</p>
+            </div>
+            <div class="login-row">
+              <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password" required>
+              <button type="submit">ログイン</button>
+            </div>
+            <p id="loginError" class="login-error" role="alert"></p>
+          </form>
+        </section>
+
+        <section id="setupPanel" class="setup-panel hidden" aria-live="polite">
+          <h2>API設定が必要です</h2>
+          <p>
+            <code>.env.example</code> を <code>.env</code> にコピーして、
+            <code>SWITCHBOT_TOKEN</code> と <code>SWITCHBOT_SECRET</code> を設定してください。
+          </p>
+          <pre>cd C:\work\Claude\switchbot-dashboard
+copy .env.example .env
+npm start</pre>
+        </section>
+
+        <section class="status-strip" aria-live="polite">
+          <div>
+            <span class="label">状態</span>
+            <strong id="connectionState">確認中</strong>
+          </div>
+          <div>
+            <span class="label">最終更新</span>
+            <strong id="lastUpdated">-</strong>
+          </div>
+          <div>
+            <span class="label">次回更新</span>
+            <strong id="nextRefresh">-</strong>
+          </div>
+        </section>
+
+        <section class="metrics-grid" aria-label="概要">
+          <div class="metric-card">
+            <span>物理デバイス</span>
+            <strong id="deviceCount">0</strong>
+          </div>
+          <div class="metric-card">
+            <span>赤外線リモコン</span>
+            <strong id="remoteCount">0</strong>
+          </div>
+          <div class="metric-card">
+            <span>状態取得</span>
+            <strong id="statusCount">0</strong>
+          </div>
+          <div class="metric-card">
+            <span>シーン</span>
+            <strong id="sceneCount">0</strong>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel">
+            <div class="panel-heading">
+              <h2>デバイス</h2>
+              <div id="deviceFilter" class="segmented" role="tablist" aria-label="デバイス表示">
+                <button class="active" type="button" data-filter="all">すべて</button>
+                <button type="button" data-filter="sensor">センサー</button>
+                <button type="button" data-filter="control">操作</button>
+              </div>
+            </div>
+            <div id="deviceList" class="device-list"></div>
+          </div>
+
+          <aside class="side-column">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>シーン</h2>
+              </div>
+              <div id="sceneList" class="scene-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>ログ</h2>
+              </div>
+              <div id="eventLog" class="event-log" aria-live="polite"></div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <template id="deviceCardTemplate">
+      <article class="device-card">
+        <div class="card-top">
+          <div>
+            <h3></h3>
+            <p class="device-type"></p>
+          </div>
+          <span class="pill"></span>
+        </div>
+        <div class="quick-values"></div>
+        <div class="actions"></div>
+        <details>
+          <summary>raw status</summary>
+          <pre></pre>
+        </details>
+      </article>
+    </template>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
