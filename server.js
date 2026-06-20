@@ -59,6 +59,7 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req);
     const password = String(body.password || "");
     if (authRequired() && !safeEqual(password, authPassword)) {
+      await delay(1000); // 総当たり対策の軽い遅延
       sendJson(res, 401, { ok: false, error: "invalid_password", message: "Password is incorrect" });
       return;
     }
@@ -167,21 +168,24 @@ async function handleApi(req, res, url) {
 }
 
 async function getSnapshot() {
-  const devices = await switchBotRequest("GET", "/devices");
-  const scenes = await switchBotRequest("GET", "/scenes");
+  const [devices, scenes] = await Promise.all([
+    switchBotRequest("GET", "/devices"),
+    switchBotRequest("GET", "/scenes")
+  ]);
   const deviceList = devices.body?.body?.deviceList || [];
-  const statuses = [];
 
-  for (const device of deviceList) {
-    const status = await switchBotRequest("GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
-    statuses.push({
-      deviceId: device.deviceId,
-      ok: status.ok,
-      statusCode: status.body?.statusCode,
-      message: status.body?.message,
-      body: status.body?.body || null
-    });
-  }
+  const statuses = await Promise.all(
+    deviceList.map(async (device) => {
+      const status = await switchBotRequest("GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
+      return {
+        deviceId: device.deviceId,
+        ok: status.ok,
+        statusCode: status.body?.statusCode,
+        message: status.body?.message,
+        body: status.body?.body || null
+      };
+    })
+  );
 
   return {
     ok: devices.ok,
@@ -306,6 +310,10 @@ function parseJson(text) {
   } catch {
     return null;
   }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function hasCredentials() {

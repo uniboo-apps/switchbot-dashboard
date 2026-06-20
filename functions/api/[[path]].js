@@ -105,6 +105,7 @@ async function handleLogin(request, env) {
   const body = await readJson(request);
   const password = String(body.password || "");
   if (!password || !(await timingSafeEqual(password, env.AUTH_PASSWORD))) {
+    await delay(1000); // 総当たり対策の軽い遅延
     return json({ ok: false, error: "invalid_password", message: "Password is incorrect" }, 401);
   }
 
@@ -134,21 +135,24 @@ async function isAuthenticated(request, env) {
 }
 
 async function getSnapshot(env) {
-  const devices = await switchBotRequest(env, "GET", "/devices");
-  const scenes = await switchBotRequest(env, "GET", "/scenes");
+  const [devices, scenes] = await Promise.all([
+    switchBotRequest(env, "GET", "/devices"),
+    switchBotRequest(env, "GET", "/scenes")
+  ]);
   const deviceList = devices.body?.body?.deviceList || [];
-  const statuses = [];
 
-  for (const device of deviceList) {
-    const status = await switchBotRequest(env, "GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
-    statuses.push({
-      deviceId: device.deviceId,
-      ok: status.ok,
-      statusCode: status.body?.statusCode,
-      message: status.body?.message,
-      body: status.body?.body || null
-    });
-  }
+  const statuses = await Promise.all(
+    deviceList.map(async (device) => {
+      const status = await switchBotRequest(env, "GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
+      return {
+        deviceId: device.deviceId,
+        ok: status.ok,
+        statusCode: status.body?.statusCode,
+        message: status.body?.message,
+        body: status.body?.body || null
+      };
+    })
+  );
 
   return {
     ok: devices.ok,
@@ -213,7 +217,18 @@ async function hmacSha256Base64(secret, text) {
 }
 
 async function signSession(env, expires) {
-  return hmacSha256Base64(env.AUTH_SECRET || env.AUTH_PASSWORD || env.SWITCHBOT_SECRET, `session:${expires}`);
+  // セッション署名は base64url（ローカルの server.js と統一・Cookie 安全文字）。
+  // SwitchBot の sign は仕様上 標準 base64 のままにする。
+  return hmacSha256Base64Url(env.AUTH_SECRET || env.AUTH_PASSWORD || env.SWITCHBOT_SECRET, `session:${expires}`);
+}
+
+async function hmacSha256Base64Url(secret, text) {
+  const base64 = await hmacSha256Base64(secret, text);
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readJson(request) {

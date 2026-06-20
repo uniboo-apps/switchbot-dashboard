@@ -76,6 +76,27 @@ const controlCommands = new Map([
   ["Lock Ultra", [{ label: "施錠", command: "lock", primary: true }, { label: "解錠", command: "unlock" }]]
 ]);
 
+const stateLabels = new Map([
+  ["on", "ON"],
+  ["off", "OFF"],
+  ["locked", "施錠"],
+  ["unlocked", "解錠"],
+  ["jammed", "ジャム"],
+  ["opened", "開"],
+  ["closed", "閉"],
+  ["open", "開"],
+  ["close", "閉"],
+  ["timeoutnotclose", "閉じず"],
+  ["true", "あり"],
+  ["false", "なし"],
+  ["detected", "検知"],
+  ["notdetected", "なし"]
+]);
+
+function translateState(value) {
+  return stateLabels.get(String(value).toLowerCase()) ?? String(value);
+}
+
 init();
 
 async function init() {
@@ -92,11 +113,11 @@ async function init() {
 
   if (state.configured) {
     await refreshSnapshot();
-    scheduleRefresh();
   }
 }
 
 function bindEvents() {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   elements.reorderButton.addEventListener("click", toggleReorderMode);
   elements.resetOrderButton.addEventListener("click", resetOrders);
   elements.loginForm.addEventListener("submit", (event) => {
@@ -262,7 +283,6 @@ async function login() {
     await loadConfig();
     if (state.configured) {
       await refreshSnapshot();
-      scheduleRefresh();
     }
   } catch (error) {
     elements.loginError.textContent = "ログインできませんでした";
@@ -274,14 +294,49 @@ async function logout() {
   await apiPost("/api/logout", {});
   state.authenticated = false;
   state.snapshot = null;
-  window.clearTimeout(state.refreshTimer);
-  window.clearInterval(state.countdownTimer);
+  stopRefreshTimers();
+  clearDeviceLists();
+  showLogin();
+}
+
+function clearDeviceLists() {
   elements.sensorHighlights.replaceChildren();
   elements.controlList.replaceChildren();
   elements.remoteList.replaceChildren();
   elements.deviceList.replaceChildren();
   elements.sceneList.replaceChildren();
+}
+
+function handleSessionExpired() {
+  state.authenticated = false;
+  state.snapshot = null;
+  stopRefreshTimers();
+  clearDeviceLists();
   showLogin();
+  addLog("セッションが切れました。再ログインしてください", true);
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    stopRefreshTimers();
+    return;
+  }
+  if (canAutoRefresh()) {
+    refreshSnapshot();
+  }
+}
+
+function canAutoRefresh() {
+  return state.configured
+    && elements.autoRefreshToggle.checked
+    && (!state.authRequired || state.authenticated);
+}
+
+function stopRefreshTimers() {
+  window.clearTimeout(state.refreshTimer);
+  window.clearInterval(state.countdownTimer);
+  state.nextRefreshAt = null;
+  elements.nextRefresh.textContent = "-";
 }
 
 function showLogin() {
@@ -606,12 +661,38 @@ async function sendCommand(device, command, button) {
     }
 
     addLog(`${device.deviceName}: ${command.label}`);
-    await refreshSnapshot();
+    await refreshDeviceStatus(device.deviceId);
   } catch (error) {
     addLog(`${device.deviceName}: ${error.message || error}`, true);
   } finally {
     button.disabled = false;
   }
+}
+
+async function refreshDeviceStatus(deviceId) {
+  if (!state.snapshot) {
+    await refreshSnapshot();
+    return;
+  }
+
+  const result = await apiGet(`/api/devices/${encodeURIComponent(deviceId)}/status`);
+  const next = {
+    deviceId,
+    ok: result.ok,
+    statusCode: result.body?.statusCode,
+    message: result.body?.message,
+    body: result.body?.body || null
+  };
+
+  const statuses = getStatuses();
+  const index = statuses.findIndex((status) => status.deviceId === deviceId);
+  if (index === -1) {
+    statuses.push(next);
+  } else {
+    statuses[index] = next;
+  }
+
+  renderAll();
 }
 
 async function executeScene(scene, button) {
@@ -659,7 +740,7 @@ function getQuickValues(device, status) {
     if (status[key] !== undefined && status[key] !== null) {
       values.push({
         label,
-        value: formatter ? formatter(status[key]) : String(status[key])
+        value: formatter ? formatter(status[key]) : translateState(status[key])
       });
     }
   }
@@ -982,7 +1063,7 @@ function getControlStateLabel(device, status) {
   const keys = ["power", "lockState", "doorState", "workingStatus", "deviceMode"];
   for (const key of keys) {
     if (status[key] !== undefined && status[key] !== null) {
-      return String(status[key]);
+      return translateState(status[key]);
     }
   }
   return device.enableCloudService ? "cloud" : "ready";
@@ -997,11 +1078,7 @@ function emptyMessage(text) {
 
 async function apiGet(path) {
   const response = await fetch(path, { credentials: "same-origin" });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.message || payload.error || response.statusText);
-  }
-  return payload;
+  return handleApiResponse(response);
 }
 
 async function apiPost(path, body) {
@@ -1011,7 +1088,19 @@ async function apiPost(path, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  const payload = await response.json();
+  return handleApiResponse(response);
+}
+
+async function handleApiResponse(response) {
+  const payload = await response.json().catch(() => ({}));
+
+  // セッション切れ（30日経過など）を検知したらログイン画面へ戻す。
+  // ログイン試行中（authenticated=false）は除外し、login() 側で扱う。
+  if (response.status === 401 && state.authRequired && state.authenticated) {
+    handleSessionExpired();
+    throw new Error(payload.message || "ログインが必要です");
+  }
+
   if (!response.ok) {
     throw new Error(payload.message || payload.error || response.statusText);
   }
@@ -1022,7 +1111,7 @@ function scheduleRefresh() {
   window.clearTimeout(state.refreshTimer);
   window.clearInterval(state.countdownTimer);
 
-  if (!elements.autoRefreshToggle.checked || !state.configured) {
+  if (!elements.autoRefreshToggle.checked || !state.configured || document.hidden) {
     state.nextRefreshAt = null;
     elements.nextRefresh.textContent = "-";
     return;
