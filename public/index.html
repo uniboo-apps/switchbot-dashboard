@@ -53,22 +53,19 @@ copy .env.example .env
 npm start</pre>
         </section>
 
-        <section class="status-strip" aria-live="polite">
-          <div>
+        <section class="overview-board" aria-label="概要">
+          <div class="status-card" aria-live="polite">
             <span class="label">状態</span>
             <strong id="connectionState">確認中</strong>
           </div>
-          <div>
+          <div class="status-card">
             <span class="label">最終更新</span>
             <strong id="lastUpdated">-</strong>
           </div>
-          <div>
+          <div class="status-card">
             <span class="label">次回更新</span>
             <strong id="nextRefresh">-</strong>
           </div>
-        </section>
-
-        <section class="metrics-grid" aria-label="概要">
           <div class="metric-card">
             <span>物理デバイス</span>
             <strong id="deviceCount">0</strong>
@@ -87,10 +84,35 @@ npm start</pre>
           </div>
         </section>
 
-        <section class="content-grid">
-          <div class="panel">
+        <section class="top-grid">
+          <section class="panel climate-panel">
             <div class="panel-heading">
-              <h2>デバイス</h2>
+              <div>
+                <p class="section-kicker">Environment</p>
+                <h2>環境</h2>
+              </div>
+            </div>
+            <div id="sensorHighlights" class="sensor-highlights"></div>
+          </section>
+
+          <section class="panel controls-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Control</p>
+                <h2>操作</h2>
+              </div>
+            </div>
+            <div id="controlList" class="control-list"></div>
+          </section>
+        </section>
+
+        <section class="body-grid">
+          <section class="panel device-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Devices</p>
+                <h2>デバイス一覧</h2>
+              </div>
               <div id="deviceFilter" class="segmented" role="tablist" aria-label="デバイス表示">
                 <button class="active" type="button" data-filter="all">すべて</button>
                 <button type="button" data-filter="sensor">センサー</button>
@@ -98,19 +120,35 @@ npm start</pre>
               </div>
             </div>
             <div id="deviceList" class="device-list"></div>
-          </div>
+          </section>
 
-          <aside class="side-column">
-            <section class="panel">
+          <aside class="side-stack">
+            <section class="panel scene-panel">
               <div class="panel-heading">
-                <h2>シーン</h2>
+                <div>
+                  <p class="section-kicker">Scenes</p>
+                  <h2>シーン</h2>
+                </div>
               </div>
               <div id="sceneList" class="scene-list"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel remote-panel">
               <div class="panel-heading">
-                <h2>ログ</h2>
+                <div>
+                  <p class="section-kicker">Remotes</p>
+                  <h2>赤外線リモコン</h2>
+                </div>
+              </div>
+              <div id="remoteList" class="remote-list"></div>
+            </section>
+
+            <section class="panel log-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">History</p>
+                  <h2>ログ</h2>
+                </div>
               </div>
               <div id="eventLog" class="event-log" aria-live="polite"></div>
             </section>

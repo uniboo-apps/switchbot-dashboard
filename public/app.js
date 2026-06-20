@@ -26,6 +26,9 @@ const elements = {
   remoteCount: document.querySelector("#remoteCount"),
   statusCount: document.querySelector("#statusCount"),
   sceneCount: document.querySelector("#sceneCount"),
+  sensorHighlights: document.querySelector("#sensorHighlights"),
+  controlList: document.querySelector("#controlList"),
+  remoteList: document.querySelector("#remoteList"),
   deviceList: document.querySelector("#deviceList"),
   sceneList: document.querySelector("#sceneList"),
   eventLog: document.querySelector("#eventLog"),
@@ -143,6 +146,9 @@ async function logout() {
   state.snapshot = null;
   window.clearTimeout(state.refreshTimer);
   window.clearInterval(state.countdownTimer);
+  elements.sensorHighlights.replaceChildren();
+  elements.controlList.replaceChildren();
+  elements.remoteList.replaceChildren();
   elements.deviceList.replaceChildren();
   elements.sceneList.replaceChildren();
   showLogin();
@@ -203,8 +209,117 @@ function renderAll() {
   elements.sceneCount.textContent = scenes.length;
   elements.lastUpdated.textContent = formatTime(new Date(state.snapshot.generatedAt));
 
+  renderSensorHighlights();
+  renderControls();
   renderDevices();
   renderScenes();
+  renderRemotes();
+}
+
+function renderSensorHighlights() {
+  elements.sensorHighlights.replaceChildren();
+  const sensors = getPhysicalDevices()
+    .filter((device) => sensorTypes.has(device.deviceType))
+    .map((device) => ({ device, status: getStatusForDevice(device.deviceId) }))
+    .sort((left, right) => sensorSortScore(left.device) - sensorSortScore(right.device));
+
+  if (!sensors.length) {
+    elements.sensorHighlights.append(emptyMessage("センサーがありません"));
+    return;
+  }
+
+  for (const item of sensors.slice(0, 8)) {
+    elements.sensorHighlights.append(renderSensorCard(item.device, item.status));
+  }
+}
+
+function renderSensorCard(device, status) {
+  const card = document.createElement("article");
+  card.className = "sensor-card";
+
+  const statusBody = status?.body || null;
+  const quickValues = getQuickValues(device, statusBody);
+  const primary = quickValues[0] || { label: "状態", value: status?.message || "未取得" };
+  const secondary = quickValues.slice(1, 4);
+
+  const badge = document.createElement("span");
+  badge.className = `sensor-badge ${status?.ok ? "ok" : "warn"}`;
+  badge.textContent = getDeviceInitial(device);
+
+  const body = document.createElement("div");
+  body.className = "sensor-body";
+
+  const label = document.createElement("span");
+  label.className = "sensor-label";
+  label.textContent = primary.label;
+
+  const value = document.createElement("strong");
+  value.className = "sensor-value";
+  value.textContent = primary.value;
+
+  const name = document.createElement("p");
+  name.className = "sensor-name";
+  name.textContent = device.deviceName || device.deviceId;
+
+  body.append(label, value, name);
+
+  const meta = document.createElement("div");
+  meta.className = "sensor-meta";
+  for (const item of secondary) {
+    const chip = document.createElement("span");
+    chip.textContent = `${item.label} ${item.value}`;
+    meta.append(chip);
+  }
+
+  card.append(badge, body);
+  if (secondary.length) {
+    card.append(meta);
+  }
+  return card;
+}
+
+function renderControls() {
+  elements.controlList.replaceChildren();
+  const controls = getPhysicalDevices()
+    .filter((device) => controlCommands.has(device.deviceType))
+    .sort((left, right) => controlSortScore(left) - controlSortScore(right));
+
+  if (!controls.length) {
+    elements.controlList.append(emptyMessage("操作できるデバイスがありません"));
+    return;
+  }
+
+  for (const device of controls) {
+    elements.controlList.append(renderControlCard(device, getStatusForDevice(device.deviceId)));
+  }
+}
+
+function renderControlCard(device, status) {
+  const card = document.createElement("article");
+  card.className = "control-card";
+
+  const heading = document.createElement("div");
+  heading.className = "control-heading";
+
+  const titleBlock = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = device.deviceName || device.deviceId;
+  const type = document.createElement("span");
+  type.textContent = device.deviceType || "Unknown";
+  titleBlock.append(title, type);
+
+  const statePill = document.createElement("span");
+  statePill.className = `state-pill ${status?.ok ? "ok" : "warn"}`;
+  statePill.textContent = getControlStateLabel(device, status?.body);
+
+  heading.append(titleBlock, statePill);
+
+  const actions = document.createElement("div");
+  actions.className = "control-actions";
+  appendCommandButtons(device, actions);
+
+  card.append(heading, actions);
+  return card;
 }
 
 function renderDevices() {
@@ -249,6 +364,18 @@ function renderDeviceCard(device, status) {
     values.append(valueTile("状態", status?.message || "未取得"));
   }
 
+  const commandSet = appendCommandButtons(device, actions);
+
+  if (!commandSet.length) {
+    actions.textContent = "操作コマンドなし";
+  }
+
+  raw.textContent = JSON.stringify(statusBody || status || device, null, 2);
+  card.dataset.deviceType = device.deviceType || "";
+  return fragment;
+}
+
+function appendCommandButtons(device, actions) {
   const commandSet = controlCommands.get(device.deviceType) || [];
   for (const command of commandSet) {
     const button = document.createElement("button");
@@ -258,14 +385,7 @@ function renderDeviceCard(device, status) {
     button.addEventListener("click", () => sendCommand(device, command, button));
     actions.append(button);
   }
-
-  if (!commandSet.length) {
-    actions.textContent = "操作コマンドなし";
-  }
-
-  raw.textContent = JSON.stringify(statusBody || status || device, null, 2);
-  card.dataset.deviceType = device.deviceType || "";
-  return fragment;
+  return commandSet;
 }
 
 function renderScenes() {
@@ -293,6 +413,30 @@ function renderScenes() {
 
     item.append(name, button);
     elements.sceneList.append(item);
+  }
+}
+
+function renderRemotes() {
+  elements.remoteList.replaceChildren();
+  const remotes = getRemoteDevices();
+
+  if (!remotes.length) {
+    elements.remoteList.append(emptyMessage("赤外線リモコンがありません"));
+    return;
+  }
+
+  for (const remote of remotes) {
+    const item = document.createElement("div");
+    item.className = "remote-item";
+
+    const type = document.createElement("span");
+    type.textContent = remote.remoteType || "Remote";
+
+    const name = document.createElement("strong");
+    name.textContent = remote.remoteName || remote.deviceName || remote.deviceId;
+
+    item.append(type, name);
+    elements.remoteList.append(item);
   }
 }
 
@@ -395,12 +539,16 @@ function valueTile(label, value) {
 function getFilteredDevices() {
   const devices = getPhysicalDevices();
   if (state.filter === "sensor") {
-    return devices.filter((device) => sensorTypes.has(device.deviceType));
+    return devices
+      .filter((device) => sensorTypes.has(device.deviceType))
+      .sort((left, right) => sensorSortScore(left) - sensorSortScore(right));
   }
   if (state.filter === "control") {
-    return devices.filter((device) => controlCommands.has(device.deviceType));
+    return devices
+      .filter((device) => controlCommands.has(device.deviceType))
+      .sort((left, right) => controlSortScore(left) - controlSortScore(right));
   }
-  return devices;
+  return [...devices].sort((left, right) => deviceSortScore(left) - deviceSortScore(right));
 }
 
 function getPhysicalDevices() {
@@ -421,6 +569,90 @@ function getStatuses() {
 
 function getStatusForDevice(deviceId) {
   return getStatuses().find((status) => status.deviceId === deviceId);
+}
+
+function deviceSortScore(device) {
+  if (sensorTypes.has(device.deviceType)) {
+    return sensorSortScore(device);
+  }
+  if (controlCommands.has(device.deviceType)) {
+    return 100 + controlSortScore(device);
+  }
+  return 300 + nameScore(device);
+}
+
+function sensorSortScore(device) {
+  const type = device.deviceType || "";
+  if (type.includes("Meter") || type.includes("Climate") || type.includes("Hub")) {
+    return 0 + nameScore(device);
+  }
+  if (type.includes("Contact") || type.includes("Motion") || type.includes("Presence")) {
+    return 40 + nameScore(device);
+  }
+  if (type.includes("Leak") || type.includes("CO2")) {
+    return 70 + nameScore(device);
+  }
+  return 90 + nameScore(device);
+}
+
+function controlSortScore(device) {
+  const type = device.deviceType || "";
+  if (type.includes("Lock")) {
+    return 0 + nameScore(device);
+  }
+  if (type.includes("Plug") || type.includes("Bot")) {
+    return 30 + nameScore(device);
+  }
+  return 60 + nameScore(device);
+}
+
+function nameScore(device) {
+  const name = normalizeName(device);
+  let score = 0;
+  for (let index = 0; index < Math.min(name.length, 8); index += 1) {
+    score += name.charCodeAt(index) / (index + 1);
+  }
+  return score / 10000;
+}
+
+function normalizeName(device) {
+  return String(device.deviceName || device.remoteName || device.deviceId || "").toLowerCase();
+}
+
+function getDeviceInitial(device) {
+  const type = device.deviceType || "";
+  if (type.includes("Meter") || type.includes("Climate")) {
+    return "°";
+  }
+  if (type.includes("CO2")) {
+    return "CO2";
+  }
+  if (type.includes("Contact")) {
+    return "開";
+  }
+  if (type.includes("Motion") || type.includes("Presence")) {
+    return "動";
+  }
+  if (type.includes("Leak")) {
+    return "水";
+  }
+  if (type.includes("Hub")) {
+    return "H";
+  }
+  return "S";
+}
+
+function getControlStateLabel(device, status) {
+  if (!status) {
+    return "未取得";
+  }
+  const keys = ["power", "lockState", "doorState", "workingStatus", "deviceMode"];
+  for (const key of keys) {
+    if (status[key] !== undefined && status[key] !== null) {
+      return String(status[key]);
+    }
+  }
+  return device.enableCloudService ? "cloud" : "ready";
 }
 
 function emptyMessage(text) {
