@@ -1,7 +1,7 @@
 // SwitchBot Dashboard Service Worker
 // 方針: 静的アセットはネットワーク優先＋キャッシュフォールバック（オフライン対応）。
 //       /api/ は認証・実データのため一切キャッシュせずネットワークのみ。
-const CACHE = "sbd-cache-v2";
+const CACHE = "sbd-cache-v3";
 const APP_SHELL = [
   "/",
   "/index.html",

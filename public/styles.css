@@ -1,15 +1,15 @@
 :root {
   color-scheme: light;
-  --bg: #f4f6f8;
+  --bg: #f8f4f4;
   --surface: #ffffff;
-  --surface-2: #eef3f7;
-  --surface-3: #f8fafc;
+  --surface-2: #f5ecee;
+  --surface-3: #fff8f8;
   --text: #18212b;
-  --muted: #617081;
-  --line: #d6dee7;
-  --accent: #087c71;
-  --accent-2: #2e64b5;
-  --accent-3: #a15318;
+  --muted: #74646a;
+  --line: #ead4d8;
+  --accent: #e60012;
+  --accent-2: #b00014;
+  --accent-3: #6f2530;
   --warn: #b35a00;
   --danger: #a73232;
   --shadow: 0 14px 32px rgba(24, 33, 43, 0.08);
@@ -121,8 +121,8 @@ h2 {
 }
 
 .icon-button.active {
-  border-color: rgba(8, 124, 113, 0.35);
-  background: rgba(8, 124, 113, 0.1);
+  border-color: rgba(230, 0, 18, 0.35);
+  background: rgba(230, 0, 18, 0.1);
   color: var(--accent);
 }
 
@@ -476,7 +476,7 @@ h2 {
   height: 34px;
   place-items: center;
   border-radius: 50%;
-  background: #e3f4ef;
+  background: #ffe7ea;
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 800;
@@ -579,7 +579,7 @@ h2 {
 }
 
 .state-pill.ok {
-  background: rgba(8, 124, 113, 0.12);
+  background: rgba(230, 0, 18, 0.1);
   color: var(--accent);
 }
 
@@ -636,7 +636,7 @@ h2 {
 }
 
 .pill.ok {
-  background: rgba(13, 124, 102, 0.12);
+  background: rgba(230, 0, 18, 0.1);
   color: var(--accent);
 }
 
@@ -696,7 +696,7 @@ h2 {
 /* 単発アクション（押す等）はアクセント枠で示す。状態の「点灯」とは別扱い。 */
 .actions button.primary,
 .control-actions button.primary {
-  border-color: rgba(13, 124, 102, 0.45);
+  border-color: rgba(230, 0, 18, 0.45);
   background: var(--surface);
   color: var(--accent);
   font-weight: 600;
@@ -705,7 +705,7 @@ h2 {
 /* 現在の状態と一致するボタンだけ緑に点灯。 */
 .actions button.active,
 .control-actions button.active {
-  border-color: rgba(13, 124, 102, 0.3);
+  border-color: rgba(230, 0, 18, 0.3);
   background: var(--accent);
   color: #fff;
 }
@@ -722,13 +722,13 @@ h2 {
 .control-actions button.pending {
   opacity: 1;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.18);
+  box-shadow: 0 0 0 2px rgba(230, 0, 18, 0.18);
   animation: pendingPulse 0.9s ease-in-out infinite;
 }
 
 @keyframes pendingPulse {
   50% {
-    box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.04);
+    box-shadow: 0 0 0 2px rgba(230, 0, 18, 0.04);
   }
 }
 
@@ -832,14 +832,14 @@ details pre {
 }
 
 .remote-actions button.primary {
-  border-color: rgba(13, 124, 102, 0.45);
+  border-color: rgba(230, 0, 18, 0.45);
   color: var(--accent);
   font-weight: 600;
 }
 
 .remote-actions button.pending {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.18);
+  box-shadow: 0 0 0 2px rgba(230, 0, 18, 0.18);
   animation: pendingPulse 0.9s ease-in-out infinite;
 }
 
@@ -862,7 +862,7 @@ details pre {
 }
 
 .orderable {
-  outline: 1px dashed rgba(8, 124, 113, 0.45);
+  outline: 1px dashed rgba(230, 0, 18, 0.45);
   outline-offset: 2px;
   cursor: grab;
 }

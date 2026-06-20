@@ -123,8 +123,6 @@ const airconPresets = [
   { id: "fan", label: "送風", command: "setAll", parameter: "26,4,1,on" }
 ];
 
-const airconPresetMap = new Map(airconPresets.map((preset) => [preset.id, preset]));
-
 const remoteCommands = new Map([
   ["Air Conditioner", airconPresets],
   ["TV", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown, irMute]],
@@ -143,31 +141,40 @@ const remoteCommands = new Map([
 ]);
 
 function getRemoteCommands(remote) {
-  const type = cleanRemoteType(remote);
-  if (type === "Air Conditioner") {
-    return getAirconCommands(remote);
-  }
-  return remoteCommands.get(type) || [irOn, irOff];
+  const choices = getRemoteButtonChoices(remote);
+  const selected = new Set(getRemoteButtonIds(remote));
+  return choices
+    .filter((choice, index) => selected.has(commandChoiceId(choice, index)))
+    .map(({ label, command, parameter, commandType }) => ({ label, command, parameter, commandType }));
 }
 
 function cleanRemoteType(remote) {
   return String(remote.remoteType || "").replace(/^DIY\s+/i, "").trim();
 }
 
-function getAirconCommands(remote) {
-  return getAirconPresetIds(remote)
-    .map((id) => airconPresetMap.get(id))
-    .filter(Boolean)
-    .map(({ label, command, parameter }) => ({ label, command, parameter }));
+function getRemoteButtonChoices(remote) {
+  return remoteCommands.get(cleanRemoteType(remote)) || [irOn, irOff];
 }
 
-function getAirconPresetIds(remote) {
+function getRemoteButtonIds(remote) {
   const id = getRemoteId(remote);
-  const configured = state.settings.airconPresets[id];
+  const configured = state.settings.remoteButtons[id];
   if (Array.isArray(configured)) {
-    return configured.filter((presetId) => airconPresetMap.has(presetId));
+    return validRemoteButtonIds(remote, configured);
   }
-  return defaultAirconPresetIds(remote);
+  return defaultRemoteButtonIds(remote);
+}
+
+function validRemoteButtonIds(remote, ids) {
+  const validIds = new Set(getRemoteButtonChoices(remote).map(commandChoiceId));
+  return ids.filter((id) => validIds.has(id));
+}
+
+function defaultRemoteButtonIds(remote) {
+  if (cleanRemoteType(remote) === "Air Conditioner") {
+    return defaultAirconPresetIds(remote);
+  }
+  return getRemoteButtonChoices(remote).map(commandChoiceId);
 }
 
 function defaultAirconPresetIds(remote) {
@@ -179,6 +186,10 @@ function defaultAirconPresetIds(remote) {
     return ["off", "cool265", "cool27", "cool275"];
   }
   return ["off", "cool26", "cool27", "cool28", "heat22", "dry26"];
+}
+
+function commandChoiceId(command, index = 0) {
+  return command.id || `${command.command}:${command.parameter ?? "default"}:${command.commandType ?? "command"}:${command.label}:${index}`;
 }
 
 const stateLabels = new Map([
@@ -394,9 +405,9 @@ function renderSettings() {
     settingsVisibilitySection("scenes", "シーン", getScenes(), getSceneId)
   );
 
-  const airconSection = settingsAirconSection();
-  if (airconSection) {
-    elements.settingsBody.prepend(airconSection);
+  const buttonSection = settingsRemoteButtonSection();
+  if (buttonSection) {
+    elements.settingsBody.prepend(buttonSection);
   }
 }
 
@@ -429,22 +440,23 @@ function settingsVisibilitySection(kind, title, items, getId) {
   return section;
 }
 
-function settingsAirconSection() {
-  const aircons = getRemoteDevices().filter((remote) => cleanRemoteType(remote) === "Air Conditioner");
-  if (!aircons.length) {
+function settingsRemoteButtonSection() {
+  const remotes = getRemoteDevices().filter((remote) => getRemoteButtonChoices(remote).length);
+  if (!remotes.length) {
     return null;
   }
 
   const section = document.createElement("section");
-  section.className = "settings-group aircon-settings";
+  section.className = "settings-group remote-button-settings";
 
   const heading = document.createElement("h3");
-  heading.textContent = "エアコン";
+  heading.textContent = "リモコンボタン";
   section.append(heading);
 
-  for (const remote of aircons) {
+  for (const remote of remotes) {
     const id = getRemoteId(remote);
-    const selected = new Set(getAirconPresetIds(remote));
+    const choices = getRemoteButtonChoices(remote);
+    const selected = new Set(getRemoteButtonIds(remote));
     const block = document.createElement("div");
     block.className = "settings-subgroup";
 
@@ -455,12 +467,13 @@ function settingsAirconSection() {
     const grid = document.createElement("div");
     grid.className = "preset-grid";
 
-    for (const preset of airconPresets) {
-      const row = settingsCheckbox(preset.label, selected.has(preset.id));
-      row.querySelector("input").dataset.presetId = preset.id;
+    for (const [index, choice] of choices.entries()) {
+      const buttonId = commandChoiceId(choice, index);
+      const row = settingsCheckbox(choice.label, selected.has(buttonId));
+      row.querySelector("input").dataset.buttonId = buttonId;
       row.querySelector("input").addEventListener("change", () => {
-        const ids = [...grid.querySelectorAll("input:checked")].map((input) => input.dataset.presetId);
-        state.settings.airconPresets[id] = ids;
+        const ids = [...grid.querySelectorAll("input:checked")].map((input) => input.dataset.buttonId);
+        state.settings.remoteButtons[id] = ids;
         saveSettings();
         renderAll();
       });
@@ -1492,7 +1505,7 @@ function createEmptySettings() {
       remotes: {},
       scenes: {}
     },
-    airconPresets: {}
+    remoteButtons: {}
   };
 }
 
@@ -1500,6 +1513,10 @@ function loadSettings() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "null");
     const defaults = createEmptySettings();
+    const remoteButtons = {
+      ...(parsed?.airconPresets && typeof parsed.airconPresets === "object" ? parsed.airconPresets : {}),
+      ...(parsed?.remoteButtons && typeof parsed.remoteButtons === "object" ? parsed.remoteButtons : {})
+    };
     return {
       ...defaults,
       ...(parsed && typeof parsed === "object" ? parsed : {}),
@@ -1507,9 +1524,7 @@ function loadSettings() {
         ...defaults.visibility,
         ...(parsed?.visibility && typeof parsed.visibility === "object" ? parsed.visibility : {})
       },
-      airconPresets: parsed?.airconPresets && typeof parsed.airconPresets === "object"
-        ? parsed.airconPresets
-        : {}
+      remoteButtons
     };
   } catch {
     return createEmptySettings();
