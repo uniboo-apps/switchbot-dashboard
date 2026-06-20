@@ -97,6 +97,30 @@ function translateState(value) {
   return stateLabels.get(String(value).toLowerCase()) ?? String(value);
 }
 
+// 各コマンドが「どの状態にする操作か」。現在状態と一致するボタンを点灯させる。
+const commandStateMap = new Map([
+  ["turnOn", "on"],
+  ["turnOff", "off"],
+  ["lock", "locked"],
+  ["unlock", "unlocked"]
+]);
+
+// 「点灯（緑）」とみなす状態。off/unlocked はニュートラル表示にする。
+const onLikeStates = new Set(["on", "locked"]);
+
+function getCurrentToggleState(statusBody) {
+  if (!statusBody) {
+    return null;
+  }
+  if (statusBody.power !== undefined && statusBody.power !== null) {
+    return String(statusBody.power).toLowerCase();
+  }
+  if (statusBody.lockState !== undefined && statusBody.lockState !== null) {
+    return String(statusBody.lockState).toLowerCase();
+  }
+  return null;
+}
+
 init();
 
 async function init() {
@@ -507,7 +531,7 @@ function renderControlCard(device, status) {
 
   const actions = document.createElement("div");
   actions.className = "control-actions";
-  appendCommandButtons(device, actions);
+  appendCommandButtons(device, actions, status);
 
   if (state.reorderMode) {
     card.append(orderControls("devices", device.deviceId));
@@ -560,7 +584,7 @@ function renderDeviceCard(device, status) {
     values.append(valueTile("状態", status?.message || "未取得"));
   }
 
-  const commandSet = appendCommandButtons(device, actions);
+  const commandSet = appendCommandButtons(device, actions, status);
 
   if (!commandSet.length) {
     actions.textContent = "操作コマンドなし";
@@ -574,13 +598,26 @@ function renderDeviceCard(device, status) {
   return fragment;
 }
 
-function appendCommandButtons(device, actions) {
+function appendCommandButtons(device, actions, status) {
   const commandSet = controlCommands.get(device.deviceType) || [];
+  const currentState = getCurrentToggleState(status?.body);
+
   for (const command of commandSet) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = command.label;
-    button.classList.toggle("primary", Boolean(command.primary));
+
+    const targetState = commandStateMap.get(command.command);
+    const isActive = Boolean(targetState && currentState && targetState === currentState);
+
+    if (isActive) {
+      // いまの状態と一致するボタンだけ点灯。ON/施錠は緑、OFF/解錠はニュートラル。
+      button.classList.add("active", onLikeStates.has(targetState) ? "on" : "off");
+    } else if (command.primary && !targetState) {
+      // 押す等の単発アクションはアクセント枠で示す（緑の塗りつぶしにはしない）。
+      button.classList.add("primary");
+    }
+
     button.addEventListener("click", () => sendCommand(device, command, button));
     actions.append(button);
   }
