@@ -289,11 +289,6 @@ h2 {
   font-size: 0.86rem;
 }
 
-.settings-check span {
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-
 .setup-panel,
 .login-panel,
 .device-card {
@@ -408,15 +403,6 @@ h2 {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
-}
-
-.section-kicker {
-  margin: 0 0 2px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .segmented {
@@ -575,12 +561,6 @@ h2 {
   overflow-wrap: anywhere;
 }
 
-.control-heading div > span {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
 .control-heading .state-pill {
   display: inline-flex;
 }
@@ -621,12 +601,6 @@ h2 {
 .card-top h3 {
   overflow-wrap: anywhere;
   font-size: 1rem;
-}
-
-.device-type {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 0.82rem;
 }
 
 .pill {
@@ -827,12 +801,6 @@ details pre {
   overflow-wrap: anywhere;
 }
 
-.remote-heading span {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 0.74rem;
-}
-
 .remote-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1023,10 +991,6 @@ body.reorder-mode .scene-item .order-controls {
     font-size: 0.78rem;
   }
 
-  .settings-check span {
-    font-size: 0.64rem;
-  }
-
   .icon-button {
     width: 34px;
     height: 34px;
@@ -1044,10 +1008,6 @@ body.reorder-mode .scene-item .order-controls {
   .panel-heading {
     gap: 6px;
     margin-bottom: 6px;
-  }
-
-  .section-kicker {
-    font-size: 0.62rem;
   }
 
   .segmented {
@@ -1082,10 +1042,7 @@ body.reorder-mode .scene-item .order-controls {
   }
 
   .sensor-label,
-  .value-tile span,
-  .device-type,
-  .control-heading div > span,
-  .remote-heading span {
+  .value-tile span {
     font-size: 0.66rem;
   }
 

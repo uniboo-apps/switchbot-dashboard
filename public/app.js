@@ -428,9 +428,6 @@ function settingsVisibilitySection(kind, title, items, getId) {
     const id = getId(item);
     const label = getItemName(item);
     const row = settingsCheckbox(label, isVisibleItem(kind, id, label));
-    const meta = document.createElement("span");
-    meta.textContent = item.deviceType || item.remoteType || "";
-    row.append(meta);
     row.querySelector("input").addEventListener("change", (event) => {
       setVisibility(kind, id, event.currentTarget.checked);
     });
@@ -847,9 +844,7 @@ function renderControlCard(device, status) {
   const titleBlock = document.createElement("div");
   const title = document.createElement("strong");
   title.textContent = device.deviceName || device.deviceId;
-  const type = document.createElement("span");
-  type.textContent = device.deviceType || "Unknown";
-  titleBlock.append(title, type);
+  titleBlock.append(title);
 
   const statePill = document.createElement("span");
   statePill.className = `state-pill ${status?.ok ? "ok" : "warn"}`;
@@ -888,7 +883,6 @@ function renderDeviceCard(device, status) {
   const fragment = elements.deviceCardTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".device-card");
   const title = fragment.querySelector("h3");
-  const type = fragment.querySelector(".device-type");
   const pill = fragment.querySelector(".pill");
   const values = fragment.querySelector(".quick-values");
   const actions = fragment.querySelector(".actions");
@@ -896,7 +890,6 @@ function renderDeviceCard(device, status) {
   makeOrderable(card, "devices", device.deviceId);
 
   title.textContent = device.deviceName || device.remoteName || device.deviceId;
-  type.textContent = `${device.deviceType || device.remoteType || "Unknown"} · ${device.deviceId}`;
 
   const statusBody = status?.body || null;
   pill.textContent = status?.ok ? "status OK" : status ? "status NG" : "no status";
