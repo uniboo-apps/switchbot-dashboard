@@ -686,6 +686,8 @@ function renderRemotes() {
 
 async function sendCommand(device, command, button) {
   button.disabled = true;
+  button.classList.add("pending");
+  const name = device.deviceName || device.deviceId;
   try {
     const result = await apiPost(`/api/devices/${encodeURIComponent(device.deviceId)}/commands`, {
       command: command.command,
@@ -697,19 +699,29 @@ async function sendCommand(device, command, button) {
       throw new Error(result.body?.message || "Command failed");
     }
 
-    addLog(`${device.deviceName}: ${command.label}`);
-    await refreshDeviceStatus(device.deviceId);
+    addLog(`${name}: ${command.label} 送信`);
+
+    // 期待する状態に変わるまで確認（点灯が切り替われば成功が分かる）。
+    const targetState = commandStateMap.get(command.command);
+    const matched = await confirmDeviceState(device.deviceId, targetState);
+
+    if (targetState && !matched) {
+      addLog(`${name}: 状態を確認できませんでした（反映待ち）`, true);
+    } else {
+      addLog(`${name}: ${command.label} 完了`);
+    }
   } catch (error) {
-    addLog(`${device.deviceName}: ${error.message || error}`, true);
+    addLog(`${name}: ${error.message || error}`, true);
   } finally {
     button.disabled = false;
+    button.classList.remove("pending");
   }
 }
 
 async function refreshDeviceStatus(deviceId) {
   if (!state.snapshot) {
     await refreshSnapshot();
-    return;
+    return null;
   }
 
   const result = await apiGet(`/api/devices/${encodeURIComponent(deviceId)}/status`);
@@ -730,6 +742,29 @@ async function refreshDeviceStatus(deviceId) {
   }
 
   renderAll();
+  return next.body;
+}
+
+// コマンド後、SwitchBot 側の反映には数秒かかることがあるため、
+// 期待する状態になるまで数回ポーリングして UI を更新する。
+async function confirmDeviceState(deviceId, targetState) {
+  const waits = targetState ? [600, 1000, 1500] : [800];
+  let matched = !targetState;
+
+  for (const wait of waits) {
+    await delay(wait);
+    const body = await refreshDeviceStatus(deviceId);
+    if (targetState && getCurrentToggleState(body) === targetState) {
+      matched = true;
+      break;
+    }
+  }
+
+  return matched;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function executeScene(scene, button) {

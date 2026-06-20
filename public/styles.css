@@ -595,6 +595,20 @@ h2 {
   opacity: 0.55;
 }
 
+.actions button.pending,
+.control-actions button.pending {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.18);
+  animation: pendingPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes pendingPulse {
+  50% {
+    box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.04);
+  }
+}
+
 details {
   margin-top: auto;
   color: var(--muted);
