@@ -100,8 +100,20 @@ const irRewind = { label: "巻戻し", command: "Rewind" };
 const irPlay = { label: "再生", command: "Play" };
 const irPause = { label: "停止", command: "Pause" };
 
+const airconCommands = [
+  irOff,
+  { label: "冷房24", command: "setAll", parameter: "24,2,1,on" },
+  { label: "冷房26", command: "setAll", parameter: "26,2,1,on" },
+  { label: "冷房28", command: "setAll", parameter: "28,2,1,on" },
+  { label: "暖房20", command: "setAll", parameter: "20,5,1,on" },
+  { label: "暖房22", command: "setAll", parameter: "22,5,1,on" },
+  { label: "暖房24", command: "setAll", parameter: "24,5,1,on" },
+  { label: "除湿26", command: "setAll", parameter: "26,3,1,on" },
+  { label: "送風", command: "setAll", parameter: "26,4,1,on" }
+];
+
 const remoteCommands = new Map([
-  ["Air Conditioner", [irOn, irOff]],
+  ["Air Conditioner", airconCommands],
   ["TV", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown, irMute]],
   ["IPTV/Streamer", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
   ["Set Top Box", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
@@ -150,9 +162,6 @@ const commandStateMap = new Map([
   ["lock", "locked"],
   ["unlock", "unlocked"]
 ]);
-
-// 「点灯（緑）」とみなす状態。off/unlocked はニュートラル表示にする。
-const onLikeStates = new Set(["on", "locked"]);
 
 function getCurrentToggleState(statusBody) {
   if (!statusBody) {
@@ -730,8 +739,8 @@ function appendCommandButtons(device, actions, status) {
     const isActive = Boolean(targetState && currentState && targetState === currentState);
 
     if (isActive) {
-      // いまの状態と一致するボタンだけ点灯。ON/施錠は緑、OFF/解錠はニュートラル。
-      button.classList.add("active", onLikeStates.has(targetState) ? "on" : "off");
+      // いまの状態と一致するボタンを点灯させる。
+      button.classList.add("active", targetState);
     } else if (command.primary && !targetState) {
       // 押す等の単発アクションはアクセント枠で示す（緑の塗りつぶしにはしない）。
       button.classList.add("primary");

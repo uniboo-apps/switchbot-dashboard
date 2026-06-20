@@ -596,20 +596,12 @@ h2 {
   font-weight: 600;
 }
 
-/* 現在の状態と一致するボタンだけ点灯。ON/施錠＝緑、OFF/解錠＝ニュートラル。 */
-.actions button.active.on,
-.control-actions button.active.on {
+/* 現在の状態と一致するボタンだけ緑に点灯。 */
+.actions button.active,
+.control-actions button.active {
   border-color: rgba(13, 124, 102, 0.3);
   background: var(--accent);
   color: #fff;
-}
-
-.actions button.active.off,
-.control-actions button.active.off {
-  border-color: var(--line);
-  background: var(--surface-2);
-  color: var(--text);
-  font-weight: 600;
 }
 
 .actions button:disabled,
