@@ -50,13 +50,37 @@ button {
   padding: 12px 0 22px;
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.brand {
+  min-width: 0;
+}
+
+.status-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.status-meta .sep {
+  color: var(--line);
+}
+
+.state-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.state-dot.ok {
+  background: var(--accent);
+}
+
+.state-dot.warn {
+  background: var(--warn);
 }
 
 h1,
@@ -116,10 +140,56 @@ h2 {
   white-space: nowrap;
 }
 
+.kebab {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--surface-2);
+}
+
+.menu-item.toggle-row {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+#logoutButton {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .setup-panel,
 .login-panel,
-.status-card,
-.metric-card,
 .device-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -201,68 +271,33 @@ h2 {
   display: none !important;
 }
 
-.overview-board {
+/* パネルボード：環境・操作・リモコン等を1つの並べ替え可能なグリッドに。 */
+.panel-board {
   display: grid;
-  grid-template-columns: 1.4fr 1.1fr 1.1fr repeat(4, 0.8fr);
-  gap: 10px;
-  margin: 4px 0 22px;
-}
-
-.status-card,
-.metric-card {
-  min-width: 0;
-  padding: 14px;
-}
-
-.label,
-.metric-card span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.status-card strong,
-.metric-card strong {
-  display: block;
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.metric-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.metric-card strong {
-  font-size: 1.45rem;
-}
-
-.top-grid,
-.body-grid {
-  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
   gap: 18px;
   align-items: start;
 }
 
-.top-grid {
-  grid-template-columns: 1fr;
-}
-
-.body-grid {
-  grid-template-columns: minmax(0, 1fr) 340px;
-}
-
-.top-grid {
-  margin-bottom: 22px;
-}
-
 .panel {
   min-width: 0;
+  align-self: start;
+}
+
+/* デバイス一覧は中身が多いので広めに使う（収まらなければ自動で1カラム）。 */
+.device-panel {
+  grid-column: span 2;
+}
+
+@media (max-width: 820px) {
+  .device-panel {
+    grid-column: auto;
+  }
 }
 
 .panel-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -276,16 +311,6 @@ h2 {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.log-panel {
-  align-self: stretch;
-}
-
-.side-stack {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
 }
 
 .segmented {
@@ -669,20 +694,60 @@ details pre {
 .remote-item {
   position: relative;
   display: grid;
-  gap: 2px;
-  padding: 11px 12px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.remote-item span {
+.remote-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.remote-heading strong {
+  overflow-wrap: anywhere;
+}
+
+.remote-heading span {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 0.74rem;
 }
 
-.remote-item strong {
-  overflow-wrap: anywhere;
+.remote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.remote-actions button.primary {
+  border-color: rgba(13, 124, 102, 0.45);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.remote-actions button.pending {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(13, 124, 102, 0.18);
+  animation: pendingPulse 0.9s ease-in-out infinite;
+}
+
+.remote-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .log-entry.error {
@@ -735,34 +800,31 @@ details pre {
   line-height: 1;
 }
 
+/* パネル見出しの並べ替えボタンは見出し内にインライン配置する。 */
+.order-controls.inline {
+  position: static;
+  margin-left: auto;
+}
+
+/* 並べ替え中のパネルは枠を強調して掴める範囲を分かりやすくする。 */
+body.reorder-mode .panel.orderable {
+  padding: 8px;
+  border-radius: 10px;
+}
+
 body.reorder-mode .sensor-card,
 body.reorder-mode .control-card,
-body.reorder-mode .device-card {
+body.reorder-mode .device-card,
+body.reorder-mode .remote-item {
   padding-top: 44px;
 }
 
-body.reorder-mode .scene-item,
-body.reorder-mode .remote-item {
+body.reorder-mode .scene-item {
   padding-right: 78px;
 }
 
 body.reorder-mode .scene-item .order-controls {
   right: 56px;
-}
-
-@media (max-width: 920px) {
-  .overview-board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .top-grid,
-  .body-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .side-stack {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 700px) {
@@ -778,21 +840,7 @@ body.reorder-mode .scene-item .order-controls {
 
   .toolbar {
     width: 100%;
-    justify-content: space-between;
-  }
-
-  .overview-board {
-    grid-template-columns: 1fr;
-  }
-
-  .side-stack {
-    grid-template-columns: 1fr;
-    order: -1;
-  }
-
-  .panel-heading {
-    align-items: flex-start;
-    flex-direction: column;
+    justify-content: flex-end;
   }
 
   .segmented {

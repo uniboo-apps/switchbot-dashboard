@@ -18,27 +18,39 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">SwitchBot API v1.1</p>
-          <h1>SwitchBot Dashboard</h1>
+        <div class="brand">
+          <h1>SwitchBot</h1>
+          <p class="status-meta">
+            <span id="stateDot" class="state-dot" aria-hidden="true"></span>
+            <span id="connectionState">確認中</span>
+            <span class="sep">·</span>
+            <span>更新 <span id="lastUpdated">-</span></span>
+            <span class="sep">·</span>
+            <span>次回 <span id="nextRefresh">-</span></span>
+          </p>
         </div>
         <div class="toolbar">
+          <button id="refreshButton" class="icon-button" type="button" title="更新" aria-label="更新">
+            <span aria-hidden="true">↻</span>
+          </button>
           <button id="reorderButton" class="icon-button" type="button" title="並び替え" aria-label="並び替え">
             <span aria-hidden="true">↕</span>
           </button>
           <button id="resetOrderButton" class="icon-button hidden" type="button" title="並びをリセット" aria-label="並びをリセット">
             <span aria-hidden="true">×</span>
           </button>
-          <button id="refreshButton" class="icon-button" type="button" title="更新" aria-label="更新">
-            <span aria-hidden="true">↻</span>
-          </button>
-          <button id="logoutButton" class="icon-button hidden" type="button" title="ログアウト" aria-label="ログアウト">
-            <span aria-hidden="true">⎋</span>
-          </button>
-          <label class="toggle">
-            <input id="autoRefreshToggle" type="checkbox" checked>
-            <span>自動更新</span>
-          </label>
+          <div class="kebab">
+            <button id="menuButton" class="icon-button" type="button" title="メニュー" aria-label="メニュー" aria-haspopup="true" aria-expanded="false">
+              <span aria-hidden="true">⋮</span>
+            </button>
+            <div id="menu" class="menu hidden" role="menu" aria-label="メニュー">
+              <label class="menu-item toggle-row">
+                <input id="autoRefreshToggle" type="checkbox" checked>
+                <span>自動更新</span>
+              </label>
+              <button id="logoutButton" class="menu-item hidden" type="button" role="menuitem">ログアウト</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -68,39 +80,8 @@
 npm start</pre>
         </section>
 
-        <section class="overview-board" aria-label="概要">
-          <div class="status-card" aria-live="polite">
-            <span class="label">状態</span>
-            <strong id="connectionState">確認中</strong>
-          </div>
-          <div class="status-card">
-            <span class="label">最終更新</span>
-            <strong id="lastUpdated">-</strong>
-          </div>
-          <div class="status-card">
-            <span class="label">次回更新</span>
-            <strong id="nextRefresh">-</strong>
-          </div>
-          <div class="metric-card">
-            <span>物理デバイス</span>
-            <strong id="deviceCount">0</strong>
-          </div>
-          <div class="metric-card">
-            <span>赤外線リモコン</span>
-            <strong id="remoteCount">0</strong>
-          </div>
-          <div class="metric-card">
-            <span>状態取得</span>
-            <strong id="statusCount">0</strong>
-          </div>
-          <div class="metric-card">
-            <span>シーン</span>
-            <strong id="sceneCount">0</strong>
-          </div>
-        </section>
-
-        <section class="top-grid">
-          <section class="panel climate-panel">
+        <div id="panelBoard" class="panel-board">
+          <section class="panel climate-panel" data-panel-id="environment">
             <div class="panel-heading">
               <div>
                 <p class="section-kicker">Environment</p>
@@ -110,7 +91,17 @@ npm start</pre>
             <div id="sensorHighlights" class="sensor-highlights"></div>
           </section>
 
-          <section class="panel controls-panel">
+          <section class="panel remote-panel" data-panel-id="remotes">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Remotes</p>
+                <h2>赤外線リモコン</h2>
+              </div>
+            </div>
+            <div id="remoteList" class="remote-list"></div>
+          </section>
+
+          <section class="panel controls-panel" data-panel-id="controls">
             <div class="panel-heading">
               <div>
                 <p class="section-kicker">Control</p>
@@ -119,10 +110,8 @@ npm start</pre>
             </div>
             <div id="controlList" class="control-list"></div>
           </section>
-        </section>
 
-        <section class="body-grid">
-          <section class="panel device-panel">
+          <section class="panel device-panel" data-panel-id="devices">
             <div class="panel-heading">
               <div>
                 <p class="section-kicker">Devices</p>
@@ -137,38 +126,26 @@ npm start</pre>
             <div id="deviceList" class="device-list"></div>
           </section>
 
-          <aside class="side-stack">
-            <section class="panel scene-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="section-kicker">Scenes</p>
-                  <h2>シーン</h2>
-                </div>
+          <section class="panel scene-panel" data-panel-id="scenes">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Scenes</p>
+                <h2>シーン</h2>
               </div>
-              <div id="sceneList" class="scene-list"></div>
-            </section>
+            </div>
+            <div id="sceneList" class="scene-list"></div>
+          </section>
 
-            <section class="panel remote-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="section-kicker">Remotes</p>
-                  <h2>赤外線リモコン</h2>
-                </div>
+          <section class="panel log-panel" data-panel-id="log">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">History</p>
+                <h2>ログ</h2>
               </div>
-              <div id="remoteList" class="remote-list"></div>
-            </section>
-
-            <section class="panel log-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="section-kicker">History</p>
-                  <h2>ログ</h2>
-                </div>
-              </div>
-              <div id="eventLog" class="event-log" aria-live="polite"></div>
-            </section>
-          </aside>
-        </section>
+            </div>
+            <div id="eventLog" class="event-log" aria-live="polite"></div>
+          </section>
+        </div>
       </main>
     </div>
 

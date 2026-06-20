@@ -22,15 +22,15 @@ const elements = {
   reorderButton: document.querySelector("#reorderButton"),
   resetOrderButton: document.querySelector("#resetOrderButton"),
   refreshButton: document.querySelector("#refreshButton"),
+  menuButton: document.querySelector("#menuButton"),
+  menu: document.querySelector("#menu"),
   logoutButton: document.querySelector("#logoutButton"),
   autoRefreshToggle: document.querySelector("#autoRefreshToggle"),
+  stateDot: document.querySelector("#stateDot"),
   connectionState: document.querySelector("#connectionState"),
   lastUpdated: document.querySelector("#lastUpdated"),
   nextRefresh: document.querySelector("#nextRefresh"),
-  deviceCount: document.querySelector("#deviceCount"),
-  remoteCount: document.querySelector("#remoteCount"),
-  statusCount: document.querySelector("#statusCount"),
-  sceneCount: document.querySelector("#sceneCount"),
+  panelBoard: document.querySelector("#panelBoard"),
   sensorHighlights: document.querySelector("#sensorHighlights"),
   controlList: document.querySelector("#controlList"),
   remoteList: document.querySelector("#remoteList"),
@@ -40,6 +40,9 @@ const elements = {
   deviceFilter: document.querySelector("#deviceFilter"),
   deviceCardTemplate: document.querySelector("#deviceCardTemplate")
 };
+
+// パネルのデフォルト並び順（環境・赤外線リモコンを上に）。
+const PANEL_IDS = ["environment", "remotes", "controls", "devices", "scenes", "log"];
 
 const sensorTypes = new Set([
   "Meter",
@@ -75,6 +78,49 @@ const controlCommands = new Map([
   ["Lock Pro", [{ label: "施錠", command: "lock", primary: true }, { label: "解錠", command: "unlock" }]],
   ["Lock Ultra", [{ label: "施錠", command: "lock", primary: true }, { label: "解錠", command: "unlock" }]]
 ]);
+
+// 赤外線リモコンの標準コマンド（commandType: command）。
+// remoteType ごとに使えるボタンを割り当てる。IR は状態を持たないので送信のみ。
+const irOn = { label: "ON", command: "turnOn" };
+const irOff = { label: "OFF", command: "turnOff" };
+const irVolUp = { label: "音量＋", command: "volumeAdd" };
+const irVolDown = { label: "音量－", command: "volumeSub" };
+const irChUp = { label: "CH＋", command: "channelAdd" };
+const irChDown = { label: "CH－", command: "channelSub" };
+const irBrightUp = { label: "明るさ＋", command: "brightnessUp" };
+const irBrightDown = { label: "明るさ－", command: "brightnessDown" };
+const irSwing = { label: "首振り", command: "swing" };
+const irTimer = { label: "タイマー", command: "timer" };
+const irLow = { label: "弱", command: "lowSpeed" };
+const irMid = { label: "中", command: "middleSpeed" };
+const irHigh = { label: "強", command: "highSpeed" };
+const irMute = { label: "消音", command: "setMute" };
+const irFastForward = { label: "早送り", command: "FastForward" };
+const irRewind = { label: "巻戻し", command: "Rewind" };
+const irPlay = { label: "再生", command: "Play" };
+const irPause = { label: "停止", command: "Pause" };
+
+const remoteCommands = new Map([
+  ["Air Conditioner", [irOn, irOff]],
+  ["TV", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown, irMute]],
+  ["IPTV/Streamer", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
+  ["Set Top Box", [irOn, irOff, irVolUp, irVolDown, irChUp, irChDown]],
+  ["DVD", [irOn, irOff, irVolUp, irVolDown, irPlay, irPause, irFastForward, irRewind]],
+  ["Speaker", [irOn, irOff, irVolUp, irVolDown, irPlay, irPause]],
+  ["Projector", [irOn, irOff]],
+  ["Light", [irOn, irOff, irBrightUp, irBrightDown]],
+  ["Fan", [irOn, irOff, irSwing, irTimer, irLow, irMid, irHigh]],
+  ["Air Purifier", [irOn, irOff]],
+  ["Water Heater", [irOn, irOff]],
+  ["Vacuum Cleaner", [irOn, irOff]],
+  ["Camera", [irOn, irOff]],
+  ["Others", [irOn, irOff]]
+]);
+
+function getRemoteCommands(remote) {
+  const type = String(remote.remoteType || "").replace(/^DIY\s+/i, "").trim();
+  return remoteCommands.get(type) || [irOn, irOff];
+}
 
 const stateLabels = new Map([
   ["on", "ON"],
@@ -125,6 +171,7 @@ init();
 
 async function init() {
   bindEvents();
+  applyPanelOrder();
   updateOrderUi();
   await loadSession();
 
@@ -151,6 +198,13 @@ function bindEvents() {
   elements.logoutButton.addEventListener("click", logout);
   elements.refreshButton.addEventListener("click", () => refreshSnapshot());
   elements.autoRefreshToggle.addEventListener("change", scheduleRefresh);
+  elements.menuButton.addEventListener("click", toggleMenu);
+  document.addEventListener("click", handleOutsideMenuClick);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeMenu();
+    }
+  });
   elements.deviceFilter.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-filter]");
     if (!button) {
@@ -187,11 +241,64 @@ function updateOrderUi() {
   elements.reorderButton.classList.toggle("active", state.reorderMode);
   elements.reorderButton.setAttribute("aria-pressed", String(state.reorderMode));
   elements.resetOrderButton.classList.toggle("hidden", !state.reorderMode);
+  decoratePanels(state.reorderMode);
+}
+
+// パネル（環境・リモコン・操作…）を並べ替え対象にする／解除する。
+function decoratePanels(on) {
+  for (const panel of elements.panelBoard.querySelectorAll("[data-panel-id]")) {
+    const id = panel.dataset.panelId;
+    makeOrderable(panel, "panels", id);
+
+    const heading = panel.querySelector(".panel-heading");
+    let controls = heading.querySelector(":scope > .order-controls");
+    if (on && !controls) {
+      heading.append(orderControls("panels", id, true));
+    } else if (!on && controls) {
+      controls.remove();
+    }
+  }
+}
+
+// 保存済みの並び順どおりにパネルの DOM を並べ替える。
+function applyPanelOrder() {
+  const ordered = orderItemsPreservingInput(
+    PANEL_IDS.map((id) => ({ id })),
+    "panels",
+    (item) => item.id
+  ).map((item) => item.id);
+
+  for (const id of ordered) {
+    const panel = elements.panelBoard.querySelector(`[data-panel-id="${id}"]`);
+    if (panel) {
+      elements.panelBoard.append(panel);
+    }
+  }
+}
+
+function toggleMenu() {
+  const open = elements.menu.classList.toggle("hidden");
+  elements.menuButton.setAttribute("aria-expanded", String(!open));
+}
+
+function closeMenu() {
+  elements.menu.classList.add("hidden");
+  elements.menuButton.setAttribute("aria-expanded", "false");
+}
+
+function handleOutsideMenuClick(event) {
+  if (elements.menu.classList.contains("hidden")) {
+    return;
+  }
+  if (!event.target.closest(".kebab")) {
+    closeMenu();
+  }
 }
 
 function resetOrders() {
   state.orders = createEmptyOrders();
   saveOrders();
+  applyPanelOrder();
   if (state.snapshot) {
     renderAll();
   }
@@ -200,6 +307,7 @@ function resetOrders() {
 
 function getOrderLists() {
   return [
+    { list: elements.panelBoard, kind: "panels" },
     { list: elements.sensorHighlights, kind: "devices" },
     { list: elements.controlList, kind: "devices" },
     { list: elements.deviceList, kind: "devices" },
@@ -215,8 +323,13 @@ function handleOrderDragStart(event) {
   }
 
   const item = getOrderItem(event.target);
-  if (!item || item.parentElement !== event.currentTarget) {
+  if (!item) {
     event.preventDefault();
+    return;
+  }
+  if (item.parentElement !== event.currentTarget) {
+    // この要素は別のリストが担当する（パネルと内部アイテムの入れ子対策）。
+    // ここで preventDefault するとアイテム側のドラッグまで止まるため、何もしない。
     return;
   }
 
@@ -235,8 +348,8 @@ function handleOrderDragOver(event) {
     return;
   }
 
-  const target = getOrderItem(event.target);
-  if (!target || target.dataset.orderKind !== state.dragItem.kind) {
+  const target = getOrderItemOfKind(event.target, state.dragItem.kind);
+  if (!target) {
     return;
   }
 
@@ -258,8 +371,8 @@ function handleOrderDrop(event) {
     return;
   }
 
-  const target = getOrderItem(event.target);
-  if (!target || target.dataset.orderKind !== state.dragItem.kind) {
+  const target = getOrderItemOfKind(event.target, state.dragItem.kind);
+  if (!target) {
     return;
   }
 
@@ -285,6 +398,14 @@ function clearDragOver(root) {
 
 function getOrderItem(target) {
   return target instanceof Element ? target.closest("[data-order-kind][data-order-id]") : null;
+}
+
+// 指定した kind の最も近い並べ替え対象を返す（入れ子対策。パネルを掴んだまま
+// 内部のカード上を通過しても、その親パネルを対象にできる）。
+function getOrderItemOfKind(target, kind) {
+  return target instanceof Element
+    ? target.closest(`[data-order-kind="${kind}"][data-order-id]`)
+    : null;
 }
 
 async function loadSession() {
@@ -315,6 +436,7 @@ async function login() {
 }
 
 async function logout() {
+  closeMenu();
   await apiPost("/api/logout", {});
   state.authenticated = false;
   state.snapshot = null;
@@ -367,7 +489,7 @@ function showLogin() {
   elements.loginPanel.classList.remove("hidden");
   elements.logoutButton.classList.add("hidden");
   elements.setupPanel.classList.add("hidden");
-  elements.connectionState.textContent = "ログイン待ち";
+  setConnection("ログイン待ち", "warn");
   elements.passwordInput.focus();
 }
 
@@ -381,7 +503,7 @@ async function loadConfig() {
   state.configured = Boolean(config.configured);
   state.autoRefreshSeconds = config.autoRefreshSeconds || 300;
   elements.setupPanel.classList.toggle("hidden", state.configured);
-  elements.connectionState.textContent = state.configured ? "API設定済み" : "未設定";
+  setConnection(state.configured ? "API設定済み" : "未設定", state.configured ? "" : "warn");
 }
 
 async function refreshSnapshot() {
@@ -396,9 +518,9 @@ async function refreshSnapshot() {
     state.snapshot = snapshot;
     renderAll();
     addLog("更新しました");
-    elements.connectionState.textContent = snapshot.ok ? "接続OK" : "一部エラー";
+    setConnection(snapshot.ok ? "接続OK" : "一部エラー", snapshot.ok ? "ok" : "warn");
   } catch (error) {
-    elements.connectionState.textContent = "取得失敗";
+    setConnection("取得失敗", "warn");
     addLog(error.message || String(error), true);
   } finally {
     setBusy(false);
@@ -407,15 +529,6 @@ async function refreshSnapshot() {
 }
 
 function renderAll() {
-  const physicalDevices = getPhysicalDevices();
-  const remoteDevices = getRemoteDevices();
-  const scenes = getScenes();
-  const okStatuses = getStatuses().filter((status) => status.ok);
-
-  elements.deviceCount.textContent = physicalDevices.length;
-  elements.remoteCount.textContent = remoteDevices.length;
-  elements.statusCount.textContent = `${okStatuses.length}/${physicalDevices.length}`;
-  elements.sceneCount.textContent = scenes.length;
   elements.lastUpdated.textContent = formatTime(new Date(state.snapshot.generatedAt));
 
   renderSensorHighlights();
@@ -423,6 +536,12 @@ function renderAll() {
   renderDevices();
   renderScenes();
   renderRemotes();
+}
+
+// ヘッダーの接続状態テキストとドット色をまとめて更新する。
+function setConnection(text, kind = "") {
+  elements.connectionState.textContent = text;
+  elements.stateDot.className = kind ? `state-dot ${kind}` : "state-dot";
 }
 
 function renderSensorHighlights() {
@@ -666,22 +785,44 @@ function renderRemotes() {
   }
 
   for (const remote of remotes) {
-    const item = document.createElement("div");
-    item.className = "remote-item";
-    makeOrderable(item, "remotes", getRemoteId(remote));
-
-    const type = document.createElement("span");
-    type.textContent = remote.remoteType || "Remote";
-
-    const name = document.createElement("strong");
-    name.textContent = remote.remoteName || remote.deviceName || remote.deviceId;
-
-    if (state.reorderMode) {
-      item.append(orderControls("remotes", getRemoteId(remote)));
-    }
-    item.append(type, name);
-    elements.remoteList.append(item);
+    elements.remoteList.append(renderRemoteCard(remote));
   }
+}
+
+function renderRemoteCard(remote) {
+  const card = document.createElement("article");
+  card.className = "remote-item";
+  makeOrderable(card, "remotes", getRemoteId(remote));
+
+  const heading = document.createElement("div");
+  heading.className = "remote-heading";
+
+  const name = document.createElement("strong");
+  name.textContent = remote.deviceName || remote.remoteName || remote.deviceId;
+
+  const type = document.createElement("span");
+  type.textContent = remote.remoteType || "Remote";
+
+  heading.append(name, type);
+
+  const actions = document.createElement("div");
+  actions.className = "remote-actions";
+  for (const command of getRemoteCommands(remote)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = command.label;
+    if (command.command === "turnOn") {
+      button.classList.add("primary");
+    }
+    button.addEventListener("click", () => sendRemoteCommand(remote, command, button));
+    actions.append(button);
+  }
+
+  if (state.reorderMode) {
+    card.append(orderControls("remotes", getRemoteId(remote)));
+  }
+  card.append(heading, actions);
+  return card;
 }
 
 async function sendCommand(device, command, button) {
@@ -710,6 +851,31 @@ async function sendCommand(device, command, button) {
     } else {
       addLog(`${name}: ${command.label} 完了`);
     }
+  } catch (error) {
+    addLog(`${name}: ${error.message || error}`, true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("pending");
+  }
+}
+
+// 赤外線リモコンは状態を持たないため、送信してログを残すだけ（ステータス確認はしない）。
+async function sendRemoteCommand(remote, command, button) {
+  button.disabled = true;
+  button.classList.add("pending");
+  const name = remote.deviceName || remote.remoteName || remote.deviceId;
+  try {
+    const result = await apiPost(`/api/devices/${encodeURIComponent(remote.deviceId)}/commands`, {
+      command: command.command,
+      parameter: command.parameter ?? "default",
+      commandType: command.commandType ?? "command"
+    });
+
+    if (!result.ok) {
+      throw new Error(result.body?.message || "Command failed");
+    }
+
+    addLog(`${name}: ${command.label} 送信`);
   } catch (error) {
     addLog(`${name}: ${error.message || error}`, true);
   } finally {
@@ -883,9 +1049,9 @@ function makeOrderable(node, kind, id) {
   node.classList.toggle("orderable", state.reorderMode);
 }
 
-function orderControls(kind, id) {
+function orderControls(kind, id, inline = false) {
   const controls = document.createElement("div");
-  controls.className = "order-controls";
+  controls.className = inline ? "order-controls inline" : "order-controls";
 
   const up = document.createElement("button");
   up.type = "button";
@@ -960,6 +1126,10 @@ function swapOrderItems(kind, leftId, rightId) {
 function updateOrder(kind, ids) {
   state.orders[getOrderKey(kind)] = ids;
   saveOrders();
+  if (kind === "panels") {
+    applyPanelOrder();
+    return;
+  }
   if (state.snapshot) {
     renderAll();
   }
@@ -1002,6 +1172,9 @@ function compareOrderedItems(kind, left, right, getId, fallbackScore) {
 }
 
 function getOrderConfig(kind) {
+  if (kind === "panels") {
+    return { items: () => PANEL_IDS.map((id) => ({ id })), id: (item) => item.id, score: () => 0 };
+  }
   if (kind === "scenes") {
     return { items: getScenes, id: getSceneId, score: () => 0 };
   }
@@ -1012,6 +1185,9 @@ function getOrderConfig(kind) {
 }
 
 function getOrderKey(kind) {
+  if (kind === "panels") {
+    return "panelIds";
+  }
   if (kind === "scenes") {
     return "sceneIds";
   }
@@ -1083,6 +1259,7 @@ function getRemoteId(remote) {
 
 function createEmptyOrders() {
   return {
+    panelIds: [],
     deviceIds: [],
     sceneIds: [],
     remoteIds: []
