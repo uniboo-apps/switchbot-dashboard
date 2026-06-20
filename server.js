@@ -1,23 +1,32 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  AUTO_REFRESH_SECONDS,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  buildCommandBody,
+  createSessionValue,
+  delay,
+  getSnapshot,
+  parseJson,
+  switchBotRequest,
+  timingSafeEqual,
+  verifySession
+} from "./functions/_shared/switchbot-core.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
-const apiHost = "https://api.switch-bot.com";
-const apiBase = "/v1.1";
-const sessionCookie = "sbd_session";
-const sessionMaxAge = 60 * 60 * 24 * 30;
 
 loadDotEnv(path.join(__dirname, ".env"));
 
-const port = Number(process.env.PORT || 8090);
+const port = Number(process.env.PORT || 8091);
 const token = process.env.SWITCHBOT_TOKEN || "";
 const secret = process.env.SWITCHBOT_SECRET || "";
 const authPassword = process.env.AUTH_PASSWORD || "";
-const authSecret = process.env.AUTH_SECRET || authPassword || secret || "local-dev";
+const sessionSecret = process.env.AUTH_SECRET || authPassword || secret || "local-dev";
+const creds = { token, secret };
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -60,25 +69,24 @@ server.listen(port, () => {
 async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/login") {
     const body = await readJsonBody(req);
-    const password = String(body.password || "");
-    if (authRequired() && !safeEqual(password, authPassword)) {
+    if (authRequired() && !timingSafeEqual(String(body.password || ""), authPassword)) {
       await delay(1000); // 総当たり対策の軽い遅延
       sendJson(res, 401, { ok: false, error: "invalid_password", message: "Password is incorrect" });
       return;
     }
 
-    const expires = Math.floor(Date.now() / 1000) + sessionMaxAge;
+    const value = await createSessionValue(sessionSecret);
     sendJson(
       res,
       200,
       { ok: true, authenticated: true, authRequired: authRequired() },
-      { "Set-Cookie": `${sessionCookie}=${expires}.${signSession(expires)}; Max-Age=${sessionMaxAge}; Path=/; HttpOnly; SameSite=Strict` }
+      { "Set-Cookie": sessionCookie(value, SESSION_MAX_AGE) }
     );
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/logout") {
-    sendJson(res, 200, { ok: true }, { "Set-Cookie": `${sessionCookie}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict` });
+    sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie("", 0) });
     return;
   }
 
@@ -86,12 +94,12 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       ok: true,
       authRequired: authRequired(),
-      authenticated: isAuthenticated(req)
+      authenticated: await isAuthenticated(req)
     });
     return;
   }
 
-  if (authRequired() && !isAuthenticated(req)) {
+  if (authRequired() && !(await isAuthenticated(req))) {
     sendJson(res, 401, { ok: false, error: "unauthorized", message: "Login required" });
     return;
   }
@@ -101,7 +109,7 @@ async function handleApi(req, res, url) {
       ok: true,
       configured: hasCredentials(),
       apiVersion: "v1.1",
-      autoRefreshSeconds: 300
+      autoRefreshSeconds: AUTO_REFRESH_SECONDS
     });
     return;
   }
@@ -116,132 +124,47 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/devices") {
-    sendJson(res, 200, await switchBotRequest("GET", "/devices"));
+    sendJson(res, 200, await switchBotRequest(creds, "GET", "/devices"));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/scenes") {
-    sendJson(res, 200, await switchBotRequest("GET", "/scenes"));
+    sendJson(res, 200, await switchBotRequest(creds, "GET", "/scenes"));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/snapshot") {
-    sendJson(res, 200, await getSnapshot());
+    sendJson(res, 200, await getSnapshot(creds));
     return;
   }
 
   const statusMatch = url.pathname.match(/^\/api\/devices\/([^/]+)\/status$/);
   if (req.method === "GET" && statusMatch) {
     const deviceId = decodeURIComponent(statusMatch[1]);
-    sendJson(res, 200, await switchBotRequest("GET", `/devices/${encodeURIComponent(deviceId)}/status`));
+    sendJson(res, 200, await switchBotRequest(creds, "GET", `/devices/${encodeURIComponent(deviceId)}/status`));
     return;
   }
 
   const commandMatch = url.pathname.match(/^\/api\/devices\/([^/]+)\/commands$/);
   if (req.method === "POST" && commandMatch) {
     const deviceId = decodeURIComponent(commandMatch[1]);
-    const body = await readJsonBody(req);
-    const commandBody = {
-      command: String(body.command || ""),
-      parameter: body.parameter === undefined ? "default" : body.parameter,
-      commandType: body.commandType || "command"
-    };
-
-    if (!commandBody.command) {
+    const commandBody = buildCommandBody(await readJsonBody(req));
+    if (!commandBody) {
       sendJson(res, 400, { ok: false, error: "missing_command" });
       return;
     }
-
-    sendJson(
-      res,
-      200,
-      await switchBotRequest("POST", `/devices/${encodeURIComponent(deviceId)}/commands`, commandBody)
-    );
+    sendJson(res, 200, await switchBotRequest(creds, "POST", `/devices/${encodeURIComponent(deviceId)}/commands`, commandBody));
     return;
   }
 
   const sceneMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/execute$/);
   if (req.method === "POST" && sceneMatch) {
     const sceneId = decodeURIComponent(sceneMatch[1]);
-    sendJson(res, 200, await switchBotRequest("POST", `/scenes/${encodeURIComponent(sceneId)}/execute`));
+    sendJson(res, 200, await switchBotRequest(creds, "POST", `/scenes/${encodeURIComponent(sceneId)}/execute`));
     return;
   }
 
   sendJson(res, 404, { ok: false, error: "not_found" });
-}
-
-async function getSnapshot() {
-  const [devices, scenes] = await Promise.all([
-    switchBotRequest("GET", "/devices"),
-    switchBotRequest("GET", "/scenes")
-  ]);
-  const deviceList = devices.body?.body?.deviceList || [];
-
-  const statuses = await Promise.all(
-    deviceList.map(async (device) => {
-      const status = await switchBotRequest("GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
-      return {
-        deviceId: device.deviceId,
-        ok: status.ok,
-        statusCode: status.body?.statusCode,
-        message: status.body?.message,
-        body: status.body?.body || null
-      };
-    })
-  );
-
-  return {
-    ok: devices.ok,
-    generatedAt: new Date().toISOString(),
-    devices: devices.body,
-    scenes: scenes.body,
-    statuses
-  };
-}
-
-async function switchBotRequest(method, apiPath, body) {
-  const nonce = crypto.randomUUID();
-  const timestamp = Date.now().toString();
-  const sign = crypto
-    .createHmac("sha256", secret)
-    .update(`${token}${timestamp}${nonce}`)
-    .digest("base64");
-
-  const headers = {
-    Authorization: token,
-    sign,
-    nonce,
-    t: timestamp,
-    "Content-Type": "application/json; charset=utf8"
-  };
-
-  const options = { method, headers };
-  if (body !== undefined) {
-    options.body = JSON.stringify(body);
-  }
-
-  const response = await fetch(`${apiHost}${apiBase}${apiPath}`, options);
-  const text = await response.text();
-  const parsed = parseJson(text);
-  const switchBotOk = parsed?.statusCode === 100;
-  const ok = response.ok && switchBotOk;
-
-  if (!ok) {
-    console.log("SwitchBot API error", {
-      method,
-      path: apiPath,
-      httpStatus: response.status,
-      result: parsed?.statusCode,
-      message: parsed?.message,
-      body: parsed?.body || text
-    });
-  }
-
-  return {
-    ok,
-    httpStatus: response.status,
-    body: parsed || { raw: text }
-  };
 }
 
 async function serveStatic(res, requestedPath) {
@@ -275,6 +198,18 @@ async function serveStatic(res, requestedPath) {
   fs.createReadStream(resolved).pipe(res);
 }
 
+// ローカルは http なので Secure は付けない（本番 Functions 側は Secure 付き）。
+function sessionCookie(value, maxAge) {
+  return `${SESSION_COOKIE}=${value}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Strict`;
+}
+
+async function isAuthenticated(req) {
+  if (!authRequired()) {
+    return true;
+  }
+  return verifySession(sessionSecret, req.headers.cookie || "");
+}
+
 function sendJson(res, status, payload, extraHeaders = {}) {
   sendText(res, status, JSON.stringify(payload), "application/json; charset=utf-8", extraHeaders);
 }
@@ -300,23 +235,7 @@ async function readJsonBody(req) {
   }
 
   const parsed = parseJson(raw);
-  if (!parsed || typeof parsed !== "object") {
-    return {};
-  }
-
-  return parsed;
-}
-
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return parsed && typeof parsed === "object" ? parsed : {};
 }
 
 function hasCredentials() {
@@ -325,53 +244,6 @@ function hasCredentials() {
 
 function authRequired() {
   return Boolean(authPassword);
-}
-
-function isAuthenticated(req) {
-  if (!authRequired()) {
-    return true;
-  }
-
-  const cookies = parseCookies(req.headers.cookie || "");
-  const value = cookies[sessionCookie] || "";
-  const [expiresText, signature] = value.split(".");
-  const expires = Number(expiresText);
-
-  if (!expires || !signature || expires < Math.floor(Date.now() / 1000)) {
-    return false;
-  }
-
-  return safeEqual(signature, signSession(expires));
-}
-
-function signSession(expires) {
-  return crypto.createHmac("sha256", authSecret).update(`session:${expires}`).digest("base64url");
-}
-
-function parseCookies(header) {
-  return Object.fromEntries(
-    header
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const index = part.indexOf("=");
-        return index === -1 ? [part, ""] : [part.slice(0, index), part.slice(index + 1)];
-      })
-  );
-}
-
-function safeEqual(left, right) {
-  const a = Buffer.from(String(left));
-  const b = Buffer.from(String(right));
-  const max = Math.max(a.length, b.length);
-  let diff = a.length ^ b.length;
-
-  for (let i = 0; i < max; i += 1) {
-    diff |= (a[i] || 0) ^ (b[i] || 0);
-  }
-
-  return diff === 0;
 }
 
 function loadDotEnv(filePath) {

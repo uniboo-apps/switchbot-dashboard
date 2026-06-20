@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check functions/api/[[path]].js && node --check public/app.js"
+    "check": "node --check server.js && node --check functions/_shared/switchbot-core.js && node --check functions/api/[[path]].js && node --check public/app.js"
   },
   "engines": {
     "node": ">=20"

@@ -1026,63 +1026,64 @@ function renderRemoteCard(remote) {
   return card;
 }
 
-async function sendCommand(device, command, button) {
+// ボタンを操作中（disabled + pending 表示）にしてアクションを実行する共通ラッパー。
+async function withPendingButton(button, action) {
   button.disabled = true;
   button.classList.add("pending");
-  const name = device.deviceName || device.deviceId;
   try {
-    const result = await apiPost(`/api/devices/${encodeURIComponent(device.deviceId)}/commands`, {
-      command: command.command,
-      parameter: command.parameter ?? "default",
-      commandType: command.commandType ?? "command"
-    });
-
-    if (!result.ok) {
-      throw new Error(result.body?.message || "Command failed");
-    }
-
-    addLog(`${name}: ${command.label} 送信`);
-
-    // 期待する状態に変わるまで確認（点灯が切り替われば成功が分かる）。
-    const targetState = commandStateMap.get(command.command);
-    const matched = await confirmDeviceState(device.deviceId, targetState);
-
-    if (targetState && !matched) {
-      addLog(`${name}: 状態を確認できませんでした（反映待ち）`, true);
-    } else {
-      addLog(`${name}: ${command.label} 完了`);
-    }
-  } catch (error) {
-    addLog(`${name}: ${error.message || error}`, true);
+    await action();
   } finally {
     button.disabled = false;
     button.classList.remove("pending");
   }
 }
 
+async function postDeviceCommand(deviceId, command) {
+  const result = await apiPost(`/api/devices/${encodeURIComponent(deviceId)}/commands`, {
+    command: command.command,
+    parameter: command.parameter ?? "default",
+    commandType: command.commandType ?? "command"
+  });
+
+  if (!result.ok) {
+    throw new Error(result.body?.message || "Command failed");
+  }
+  return result;
+}
+
+async function sendCommand(device, command, button) {
+  const name = device.deviceName || device.deviceId;
+  await withPendingButton(button, async () => {
+    try {
+      await postDeviceCommand(device.deviceId, command);
+      addLog(`${name}: ${command.label} 送信`);
+
+      // 期待する状態に変わるまで確認（点灯が切り替われば成功が分かる）。
+      const targetState = commandStateMap.get(command.command);
+      const matched = await confirmDeviceState(device.deviceId, targetState);
+
+      if (targetState && !matched) {
+        addLog(`${name}: 状態を確認できませんでした（反映待ち）`, true);
+      } else {
+        addLog(`${name}: ${command.label} 完了`);
+      }
+    } catch (error) {
+      addLog(`${name}: ${error.message || error}`, true);
+    }
+  });
+}
+
 // 赤外線リモコンは状態を持たないため、送信してログを残すだけ（ステータス確認はしない）。
 async function sendRemoteCommand(remote, command, button) {
-  button.disabled = true;
-  button.classList.add("pending");
   const name = remote.deviceName || remote.remoteName || remote.deviceId;
-  try {
-    const result = await apiPost(`/api/devices/${encodeURIComponent(remote.deviceId)}/commands`, {
-      command: command.command,
-      parameter: command.parameter ?? "default",
-      commandType: command.commandType ?? "command"
-    });
-
-    if (!result.ok) {
-      throw new Error(result.body?.message || "Command failed");
+  await withPendingButton(button, async () => {
+    try {
+      await postDeviceCommand(remote.deviceId, command);
+      addLog(`${name}: ${command.label} 送信`);
+    } catch (error) {
+      addLog(`${name}: ${error.message || error}`, true);
     }
-
-    addLog(`${name}: ${command.label} 送信`);
-  } catch (error) {
-    addLog(`${name}: ${error.message || error}`, true);
-  } finally {
-    button.disabled = false;
-    button.classList.remove("pending");
-  }
+  });
 }
 
 async function refreshDeviceStatus(deviceId) {

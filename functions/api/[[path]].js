@@ -1,8 +1,15 @@
-const API_HOST = "https://api.switch-bot.com";
-const API_BASE = "/v1.1";
-const AUTO_REFRESH_SECONDS = 300;
-const SESSION_COOKIE = "sbd_session";
-const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+import {
+  AUTO_REFRESH_SECONDS,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  buildCommandBody,
+  createSessionValue,
+  delay,
+  getSnapshot,
+  switchBotRequest,
+  timingSafeEqual,
+  verifySession
+} from "../_shared/switchbot-core.js";
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -15,17 +22,14 @@ export async function onRequest(context) {
     }
 
     if (request.method === "POST" && path === "logout") {
-      return json({ ok: true }, 200, {
-        "Set-Cookie": clearSessionCookie()
-      });
+      return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0) });
     }
 
     if (request.method === "GET" && path === "session") {
-      const authenticated = await isAuthenticated(request, env);
       return json({
         ok: true,
         authRequired: authRequired(env),
-        authenticated
+        authenticated: await isAuthenticated(request, env)
       });
     }
 
@@ -50,40 +54,36 @@ export async function onRequest(context) {
       }, 400);
     }
 
+    const creds = credentials(env);
+
     if (request.method === "GET" && path === "devices") {
-      return json(await switchBotRequest(env, "GET", "/devices"));
+      return json(await switchBotRequest(creds, "GET", "/devices"));
     }
 
     if (request.method === "GET" && path === "scenes") {
-      return json(await switchBotRequest(env, "GET", "/scenes"));
+      return json(await switchBotRequest(creds, "GET", "/scenes"));
     }
 
     if (request.method === "GET" && path === "snapshot") {
-      return json(await getSnapshot(env));
+      return json(await getSnapshot(creds));
     }
 
     const segments = path.split("/").filter(Boolean).map(decodeURIComponent);
-    if (request.method === "GET" && segments.length === 3 && segments[0] === "devices" && segments[2] === "status") {
-      return json(await switchBotRequest(env, "GET", `/devices/${encodeURIComponent(segments[1])}/status`));
+
+    if (request.method === "GET" && isRoute(segments, "devices", "status")) {
+      return json(await switchBotRequest(creds, "GET", `/devices/${encodeURIComponent(segments[1])}/status`));
     }
 
-    if (request.method === "POST" && segments.length === 3 && segments[0] === "devices" && segments[2] === "commands") {
-      const body = await readJson(request);
-      const commandBody = {
-        command: String(body.command || ""),
-        parameter: body.parameter === undefined ? "default" : body.parameter,
-        commandType: body.commandType || "command"
-      };
-
-      if (!commandBody.command) {
+    if (request.method === "POST" && isRoute(segments, "devices", "commands")) {
+      const commandBody = buildCommandBody(await readJson(request));
+      if (!commandBody) {
         return json({ ok: false, error: "missing_command" }, 400);
       }
-
-      return json(await switchBotRequest(env, "POST", `/devices/${encodeURIComponent(segments[1])}/commands`, commandBody));
+      return json(await switchBotRequest(creds, "POST", `/devices/${encodeURIComponent(segments[1])}/commands`, commandBody));
     }
 
-    if (request.method === "POST" && segments.length === 3 && segments[0] === "scenes" && segments[2] === "execute") {
-      return json(await switchBotRequest(env, "POST", `/scenes/${encodeURIComponent(segments[1])}/execute`));
+    if (request.method === "POST" && isRoute(segments, "scenes", "execute")) {
+      return json(await switchBotRequest(creds, "POST", `/scenes/${encodeURIComponent(segments[1])}/execute`));
     }
 
     return json({ ok: false, error: "not_found" }, 404);
@@ -97,6 +97,10 @@ export async function onRequest(context) {
   }
 }
 
+function isRoute(segments, resource, action) {
+  return segments.length === 3 && segments[0] === resource && segments[2] === action;
+}
+
 async function handleLogin(request, env) {
   if (!authRequired(env)) {
     return json({ ok: true, authenticated: true, authRequired: false });
@@ -104,15 +108,14 @@ async function handleLogin(request, env) {
 
   const body = await readJson(request);
   const password = String(body.password || "");
-  if (!password || !(await timingSafeEqual(password, env.AUTH_PASSWORD))) {
+  if (!password || !timingSafeEqual(password, env.AUTH_PASSWORD)) {
     await delay(1000); // 総当たり対策の軽い遅延
     return json({ ok: false, error: "invalid_password", message: "Password is incorrect" }, 401);
   }
 
-  const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE;
-  const value = `${expires}.${await signSession(env, expires)}`;
+  const value = await createSessionValue(sessionSecret(env));
   return json({ ok: true, authenticated: true, authRequired: true }, 200, {
-    "Set-Cookie": `${SESSION_COOKIE}=${value}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; Secure; SameSite=Strict`
+    "Set-Cookie": sessionCookie(value, SESSION_MAX_AGE)
   });
 }
 
@@ -120,123 +123,15 @@ async function isAuthenticated(request, env) {
   if (!authRequired(env)) {
     return true;
   }
-
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
-  const session = cookies[SESSION_COOKIE] || "";
-  const [expiresText, signature] = session.split(".");
-  const expires = Number(expiresText);
-
-  if (!expires || !signature || expires < Math.floor(Date.now() / 1000)) {
-    return false;
-  }
-
-  const expected = await signSession(env, expires);
-  return timingSafeEqual(signature, expected);
+  return verifySession(sessionSecret(env), request.headers.get("Cookie") || "");
 }
 
-async function getSnapshot(env) {
-  const [devices, scenes] = await Promise.all([
-    switchBotRequest(env, "GET", "/devices"),
-    switchBotRequest(env, "GET", "/scenes")
-  ]);
-  const deviceList = devices.body?.body?.deviceList || [];
-
-  const statuses = await Promise.all(
-    deviceList.map(async (device) => {
-      const status = await switchBotRequest(env, "GET", `/devices/${encodeURIComponent(device.deviceId)}/status`);
-      return {
-        deviceId: device.deviceId,
-        ok: status.ok,
-        statusCode: status.body?.statusCode,
-        message: status.body?.message,
-        body: status.body?.body || null
-      };
-    })
-  );
-
-  return {
-    ok: devices.ok,
-    generatedAt: new Date().toISOString(),
-    devices: devices.body,
-    scenes: scenes.body,
-    statuses
-  };
+function credentials(env) {
+  return { token: env.SWITCHBOT_TOKEN, secret: env.SWITCHBOT_SECRET };
 }
 
-async function switchBotRequest(env, method, apiPath, body) {
-  const nonce = crypto.randomUUID();
-  const timestamp = Date.now().toString();
-  const sign = await hmacSha256Base64(env.SWITCHBOT_SECRET, `${env.SWITCHBOT_TOKEN}${timestamp}${nonce}`);
-  const headers = {
-    Authorization: env.SWITCHBOT_TOKEN,
-    sign,
-    nonce,
-    t: timestamp,
-    "Content-Type": "application/json; charset=utf8"
-  };
-
-  const options = { method, headers };
-  if (body !== undefined) {
-    options.body = JSON.stringify(body);
-  }
-
-  const response = await fetch(`${API_HOST}${API_BASE}${apiPath}`, options);
-  const text = await response.text();
-  const parsed = parseJson(text);
-  const switchBotOk = parsed?.statusCode === 100;
-  const ok = response.ok && switchBotOk;
-
-  if (!ok) {
-    console.log("SwitchBot API error", {
-      method,
-      path: apiPath,
-      httpStatus: response.status,
-      result: parsed?.statusCode,
-      message: parsed?.message,
-      body: parsed?.body || text
-    });
-  }
-
-  return {
-    ok,
-    httpStatus: response.status,
-    body: parsed || { raw: text }
-  };
-}
-
-async function hmacSha256Base64(secret, text) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
-}
-
-async function signSession(env, expires) {
-  // セッション署名は base64url（ローカルの server.js と統一・Cookie 安全文字）。
-  // SwitchBot の sign は仕様上 標準 base64 のままにする。
-  return hmacSha256Base64Url(env.AUTH_SECRET || env.AUTH_PASSWORD || env.SWITCHBOT_SECRET, `session:${expires}`);
-}
-
-async function hmacSha256Base64Url(secret, text) {
-  const base64 = await hmacSha256Base64(secret, text);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function readJson(request) {
-  try {
-    return await request.json();
-  } catch {
-    return {};
-  }
+function sessionSecret(env) {
+  return env.AUTH_SECRET || env.AUTH_PASSWORD || env.SWITCHBOT_SECRET;
 }
 
 function hasCredentials(env) {
@@ -247,12 +142,16 @@ function authRequired(env) {
   return Boolean(env.AUTH_PASSWORD);
 }
 
-function parseJson(text) {
+async function readJson(request) {
   try {
-    return JSON.parse(text);
+    return await request.json();
   } catch {
-    return null;
+    return {};
   }
+}
+
+function sessionCookie(value, maxAge) {
+  return `${SESSION_COOKIE}=${value}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Strict`;
 }
 
 function json(payload, status = 200, extraHeaders = {}) {
@@ -265,34 +164,3 @@ function json(payload, status = 200, extraHeaders = {}) {
     }
   });
 }
-
-function parseCookies(header) {
-  return Object.fromEntries(
-    header
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const index = part.indexOf("=");
-        return index === -1 ? [part, ""] : [part.slice(0, index), part.slice(index + 1)];
-      })
-  );
-}
-
-function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict`;
-}
-
-async function timingSafeEqual(a, b) {
-  const left = new TextEncoder().encode(String(a));
-  const right = new TextEncoder().encode(String(b));
-  const max = Math.max(left.length, right.length);
-  let diff = left.length ^ right.length;
-
-  for (let i = 0; i < max; i += 1) {
-    diff |= (left[i] || 0) ^ (right[i] || 0);
-  }
-
-  return diff === 0;
-}
-
