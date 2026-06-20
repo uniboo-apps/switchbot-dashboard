@@ -4,6 +4,9 @@ const state = {
   authenticated: false,
   snapshot: null,
   filter: "all",
+  reorderMode: false,
+  orders: loadOrders(),
+  dragItem: null,
   autoRefreshSeconds: 300,
   refreshTimer: null,
   countdownTimer: null,
@@ -16,6 +19,8 @@ const elements = {
   passwordInput: document.querySelector("#passwordInput"),
   loginError: document.querySelector("#loginError"),
   setupPanel: document.querySelector("#setupPanel"),
+  reorderButton: document.querySelector("#reorderButton"),
+  resetOrderButton: document.querySelector("#resetOrderButton"),
   refreshButton: document.querySelector("#refreshButton"),
   logoutButton: document.querySelector("#logoutButton"),
   autoRefreshToggle: document.querySelector("#autoRefreshToggle"),
@@ -75,6 +80,7 @@ init();
 
 async function init() {
   bindEvents();
+  updateOrderUi();
   await loadSession();
 
   if (state.authRequired && !state.authenticated) {
@@ -91,6 +97,8 @@ async function init() {
 }
 
 function bindEvents() {
+  elements.reorderButton.addEventListener("click", toggleReorderMode);
+  elements.resetOrderButton.addEventListener("click", resetOrders);
   elements.loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
     login();
@@ -110,6 +118,128 @@ function bindEvents() {
     }
     renderDevices();
   });
+
+  for (const { list, kind } of getOrderLists()) {
+    list.dataset.orderList = kind;
+    list.addEventListener("dragstart", handleOrderDragStart);
+    list.addEventListener("dragover", handleOrderDragOver);
+    list.addEventListener("dragleave", handleOrderDragLeave);
+    list.addEventListener("drop", handleOrderDrop);
+    list.addEventListener("dragend", clearDragState);
+  }
+}
+
+function toggleReorderMode() {
+  state.reorderMode = !state.reorderMode;
+  updateOrderUi();
+  if (state.snapshot) {
+    renderAll();
+  }
+}
+
+function updateOrderUi() {
+  document.body.classList.toggle("reorder-mode", state.reorderMode);
+  elements.reorderButton.classList.toggle("active", state.reorderMode);
+  elements.reorderButton.setAttribute("aria-pressed", String(state.reorderMode));
+  elements.resetOrderButton.classList.toggle("hidden", !state.reorderMode);
+}
+
+function resetOrders() {
+  state.orders = createEmptyOrders();
+  saveOrders();
+  if (state.snapshot) {
+    renderAll();
+  }
+  addLog("並びをリセットしました");
+}
+
+function getOrderLists() {
+  return [
+    { list: elements.sensorHighlights, kind: "devices" },
+    { list: elements.controlList, kind: "devices" },
+    { list: elements.deviceList, kind: "devices" },
+    { list: elements.sceneList, kind: "scenes" },
+    { list: elements.remoteList, kind: "remotes" }
+  ];
+}
+
+function handleOrderDragStart(event) {
+  if (!state.reorderMode) {
+    event.preventDefault();
+    return;
+  }
+
+  const item = getOrderItem(event.target);
+  if (!item || item.parentElement !== event.currentTarget) {
+    event.preventDefault();
+    return;
+  }
+
+  state.dragItem = {
+    kind: item.dataset.orderKind,
+    id: item.dataset.orderId,
+    list: event.currentTarget
+  };
+  item.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", state.dragItem.id);
+}
+
+function handleOrderDragOver(event) {
+  if (!state.reorderMode || !state.dragItem || state.dragItem.list !== event.currentTarget) {
+    return;
+  }
+
+  const target = getOrderItem(event.target);
+  if (!target || target.dataset.orderKind !== state.dragItem.kind) {
+    return;
+  }
+
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  clearDragOver(event.currentTarget);
+  target.classList.add("drag-over");
+}
+
+function handleOrderDragLeave(event) {
+  const target = getOrderItem(event.target);
+  if (target && !target.contains(event.relatedTarget)) {
+    target.classList.remove("drag-over");
+  }
+}
+
+function handleOrderDrop(event) {
+  if (!state.reorderMode || !state.dragItem || state.dragItem.list !== event.currentTarget) {
+    return;
+  }
+
+  const target = getOrderItem(event.target);
+  if (!target || target.dataset.orderKind !== state.dragItem.kind) {
+    return;
+  }
+
+  event.preventDefault();
+  moveOrderItemBefore(state.dragItem.kind, state.dragItem.id, target.dataset.orderId);
+  clearDragState(event);
+}
+
+function clearDragState(event) {
+  const list = event?.currentTarget || document;
+  clearDragOver(list);
+  for (const item of document.querySelectorAll(".dragging")) {
+    item.classList.remove("dragging");
+  }
+  state.dragItem = null;
+}
+
+function clearDragOver(root) {
+  for (const item of root.querySelectorAll?.(".drag-over") || []) {
+    item.classList.remove("drag-over");
+  }
+}
+
+function getOrderItem(target) {
+  return target instanceof Element ? target.closest("[data-order-kind][data-order-id]") : null;
 }
 
 async function loadSession() {
@@ -221,7 +351,7 @@ function renderSensorHighlights() {
   const sensors = getPhysicalDevices()
     .filter((device) => sensorTypes.has(device.deviceType))
     .map((device) => ({ device, status: getStatusForDevice(device.deviceId) }))
-    .sort((left, right) => sensorSortScore(left.device) - sensorSortScore(right.device));
+    .sort((left, right) => compareOrderedItems("devices", left.device, right.device, getDeviceId, sensorSortScore));
 
   if (!sensors.length) {
     elements.sensorHighlights.append(emptyMessage("センサーがありません"));
@@ -236,6 +366,7 @@ function renderSensorHighlights() {
 function renderSensorCard(device, status) {
   const card = document.createElement("article");
   card.className = "sensor-card";
+  makeOrderable(card, "devices", device.deviceId);
 
   const statusBody = status?.body || null;
   const quickValues = getQuickValues(device, statusBody);
@@ -271,6 +402,10 @@ function renderSensorCard(device, status) {
     meta.append(chip);
   }
 
+  if (state.reorderMode) {
+    card.append(orderControls("devices", device.deviceId));
+  }
+
   card.append(badge, body);
   if (secondary.length) {
     card.append(meta);
@@ -282,7 +417,7 @@ function renderControls() {
   elements.controlList.replaceChildren();
   const controls = getPhysicalDevices()
     .filter((device) => controlCommands.has(device.deviceType))
-    .sort((left, right) => controlSortScore(left) - controlSortScore(right));
+    .sort((left, right) => compareOrderedItems("devices", left, right, getDeviceId, controlSortScore));
 
   if (!controls.length) {
     elements.controlList.append(emptyMessage("操作できるデバイスがありません"));
@@ -297,6 +432,7 @@ function renderControls() {
 function renderControlCard(device, status) {
   const card = document.createElement("article");
   card.className = "control-card";
+  makeOrderable(card, "devices", device.deviceId);
 
   const heading = document.createElement("div");
   heading.className = "control-heading";
@@ -317,6 +453,10 @@ function renderControlCard(device, status) {
   const actions = document.createElement("div");
   actions.className = "control-actions";
   appendCommandButtons(device, actions);
+
+  if (state.reorderMode) {
+    card.append(orderControls("devices", device.deviceId));
+  }
 
   card.append(heading, actions);
   return card;
@@ -346,6 +486,7 @@ function renderDeviceCard(device, status) {
   const values = fragment.querySelector(".quick-values");
   const actions = fragment.querySelector(".actions");
   const raw = fragment.querySelector("pre");
+  makeOrderable(card, "devices", device.deviceId);
 
   title.textContent = device.deviceName || device.remoteName || device.deviceId;
   type.textContent = `${device.deviceType || device.remoteType || "Unknown"} · ${device.deviceId}`;
@@ -372,6 +513,9 @@ function renderDeviceCard(device, status) {
 
   raw.textContent = JSON.stringify(statusBody || status || device, null, 2);
   card.dataset.deviceType = device.deviceType || "";
+  if (state.reorderMode) {
+    card.prepend(orderControls("devices", device.deviceId));
+  }
   return fragment;
 }
 
@@ -390,7 +534,7 @@ function appendCommandButtons(device, actions) {
 
 function renderScenes() {
   elements.sceneList.replaceChildren();
-  const scenes = getScenes();
+  const scenes = orderItemsPreservingInput(getScenes(), "scenes", getSceneId);
 
   if (!scenes.length) {
     elements.sceneList.append(emptyMessage("シーンがありません"));
@@ -400,6 +544,7 @@ function renderScenes() {
   for (const scene of scenes) {
     const item = document.createElement("div");
     item.className = "scene-item";
+    makeOrderable(item, "scenes", getSceneId(scene));
 
     const name = document.createElement("strong");
     name.textContent = scene.sceneName || scene.sceneId;
@@ -411,6 +556,9 @@ function renderScenes() {
     button.textContent = "▶";
     button.addEventListener("click", () => executeScene(scene, button));
 
+    if (state.reorderMode) {
+      item.append(orderControls("scenes", getSceneId(scene)));
+    }
     item.append(name, button);
     elements.sceneList.append(item);
   }
@@ -418,7 +566,7 @@ function renderScenes() {
 
 function renderRemotes() {
   elements.remoteList.replaceChildren();
-  const remotes = getRemoteDevices();
+  const remotes = orderItemsPreservingInput(getRemoteDevices(), "remotes", getRemoteId);
 
   if (!remotes.length) {
     elements.remoteList.append(emptyMessage("赤外線リモコンがありません"));
@@ -428,6 +576,7 @@ function renderRemotes() {
   for (const remote of remotes) {
     const item = document.createElement("div");
     item.className = "remote-item";
+    makeOrderable(item, "remotes", getRemoteId(remote));
 
     const type = document.createElement("span");
     type.textContent = remote.remoteType || "Remote";
@@ -435,6 +584,9 @@ function renderRemotes() {
     const name = document.createElement("strong");
     name.textContent = remote.remoteName || remote.deviceName || remote.deviceId;
 
+    if (state.reorderMode) {
+      item.append(orderControls("remotes", getRemoteId(remote)));
+    }
     item.append(type, name);
     elements.remoteList.append(item);
   }
@@ -541,14 +693,14 @@ function getFilteredDevices() {
   if (state.filter === "sensor") {
     return devices
       .filter((device) => sensorTypes.has(device.deviceType))
-      .sort((left, right) => sensorSortScore(left) - sensorSortScore(right));
+      .sort((left, right) => compareOrderedItems("devices", left, right, getDeviceId, sensorSortScore));
   }
   if (state.filter === "control") {
     return devices
       .filter((device) => controlCommands.has(device.deviceType))
-      .sort((left, right) => controlSortScore(left) - controlSortScore(right));
+      .sort((left, right) => compareOrderedItems("devices", left, right, getDeviceId, controlSortScore));
   }
-  return [...devices].sort((left, right) => deviceSortScore(left) - deviceSortScore(right));
+  return orderItems(devices, "devices", getDeviceId, deviceSortScore);
 }
 
 function getPhysicalDevices() {
@@ -569,6 +721,151 @@ function getStatuses() {
 
 function getStatusForDevice(deviceId) {
   return getStatuses().find((status) => status.deviceId === deviceId);
+}
+
+function makeOrderable(node, kind, id) {
+  node.dataset.orderKind = kind;
+  node.dataset.orderId = id;
+  node.draggable = state.reorderMode;
+  node.classList.toggle("orderable", state.reorderMode);
+}
+
+function orderControls(kind, id) {
+  const controls = document.createElement("div");
+  controls.className = "order-controls";
+
+  const up = document.createElement("button");
+  up.type = "button";
+  up.title = "上へ";
+  up.setAttribute("aria-label", "上へ");
+  up.textContent = "↑";
+  up.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    moveVisibleOrderItem(kind, id, -1, event.currentTarget);
+  });
+
+  const down = document.createElement("button");
+  down.type = "button";
+  down.title = "下へ";
+  down.setAttribute("aria-label", "下へ");
+  down.textContent = "↓";
+  down.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    moveVisibleOrderItem(kind, id, 1, event.currentTarget);
+  });
+
+  controls.append(up, down);
+  return controls;
+}
+
+function moveVisibleOrderItem(kind, id, direction, button) {
+  const list = button.closest("[data-order-list]");
+  if (!list) {
+    return;
+  }
+
+  const visibleIds = getVisibleOrderIds(list, kind);
+  const index = visibleIds.indexOf(id);
+  const targetId = visibleIds[index + direction];
+  if (!targetId) {
+    return;
+  }
+
+  swapOrderItems(kind, id, targetId);
+}
+
+function moveOrderItemBefore(kind, movingId, targetId) {
+  if (movingId === targetId) {
+    return;
+  }
+
+  const ids = getCurrentOrderIds(kind).filter((id) => id !== movingId);
+  const index = ids.indexOf(targetId);
+  if (index === -1) {
+    return;
+  }
+
+  ids.splice(index, 0, movingId);
+  updateOrder(kind, ids);
+}
+
+function swapOrderItems(kind, leftId, rightId) {
+  const ids = getCurrentOrderIds(kind);
+  const leftIndex = ids.indexOf(leftId);
+  const rightIndex = ids.indexOf(rightId);
+  if (leftIndex === -1 || rightIndex === -1) {
+    return;
+  }
+
+  ids[leftIndex] = rightId;
+  ids[rightIndex] = leftId;
+  updateOrder(kind, ids);
+}
+
+function updateOrder(kind, ids) {
+  state.orders[getOrderKey(kind)] = ids;
+  saveOrders();
+  if (state.snapshot) {
+    renderAll();
+  }
+}
+
+function getVisibleOrderIds(list, kind) {
+  return [...list.querySelectorAll(`[data-order-kind="${kind}"][data-order-id]`)]
+    .map((item) => item.dataset.orderId)
+    .filter(Boolean);
+}
+
+function getCurrentOrderIds(kind) {
+  const config = getOrderConfig(kind);
+  return orderItems(config.items(), kind, config.id, config.score).map(config.id);
+}
+
+function orderItems(items, kind, getId, fallbackScore) {
+  return [...items].sort((left, right) => compareOrderedItems(kind, left, right, getId, fallbackScore));
+}
+
+function orderItemsPreservingInput(items, kind, getId) {
+  return [...items].sort((left, right) => compareOrderedItems(kind, left, right, getId, () => 0));
+}
+
+function compareOrderedItems(kind, left, right, getId, fallbackScore) {
+  const order = state.orders[getOrderKey(kind)] || [];
+  const leftIndex = order.indexOf(getId(left));
+  const rightIndex = order.indexOf(getId(right));
+
+  if (leftIndex !== -1 && rightIndex !== -1) {
+    return leftIndex - rightIndex;
+  }
+  if (leftIndex !== -1) {
+    return -1;
+  }
+  if (rightIndex !== -1) {
+    return 1;
+  }
+  return fallbackScore(left) - fallbackScore(right);
+}
+
+function getOrderConfig(kind) {
+  if (kind === "scenes") {
+    return { items: getScenes, id: getSceneId, score: () => 0 };
+  }
+  if (kind === "remotes") {
+    return { items: getRemoteDevices, id: getRemoteId, score: () => 0 };
+  }
+  return { items: getPhysicalDevices, id: getDeviceId, score: deviceSortScore };
+}
+
+function getOrderKey(kind) {
+  if (kind === "scenes") {
+    return "sceneIds";
+  }
+  if (kind === "remotes") {
+    return "remoteIds";
+  }
+  return "deviceIds";
 }
 
 function deviceSortScore(device) {
@@ -617,6 +914,42 @@ function nameScore(device) {
 
 function normalizeName(device) {
   return String(device.deviceName || device.remoteName || device.deviceId || "").toLowerCase();
+}
+
+function getDeviceId(device) {
+  return device.deviceId || device.remoteId || normalizeName(device);
+}
+
+function getSceneId(scene) {
+  return scene.sceneId || scene.sceneName || "";
+}
+
+function getRemoteId(remote) {
+  return remote.deviceId || remote.remoteName || remote.remoteType || "";
+}
+
+function createEmptyOrders() {
+  return {
+    deviceIds: [],
+    sceneIds: [],
+    remoteIds: []
+  };
+}
+
+function loadOrders() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("switchbotDashboard.order.v1") || "null");
+    return {
+      ...createEmptyOrders(),
+      ...(parsed && typeof parsed === "object" ? parsed : {})
+    };
+  } catch {
+    return createEmptyOrders();
+  }
+}
+
+function saveOrders() {
+  localStorage.setItem("switchbotDashboard.order.v1", JSON.stringify(state.orders));
 }
 
 function getDeviceInitial(device) {

@@ -96,6 +96,12 @@ h2 {
   font-size: 1.25rem;
 }
 
+.icon-button.active {
+  border-color: rgba(8, 124, 113, 0.35);
+  background: rgba(8, 124, 113, 0.1);
+  color: var(--accent);
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
@@ -321,6 +327,7 @@ h2 {
 }
 
 .sensor-card {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
@@ -408,6 +415,7 @@ h2 {
 }
 
 .control-card {
+  position: relative;
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -456,6 +464,7 @@ h2 {
 }
 
 .device-card {
+  position: relative;
   display: flex;
   min-height: 224px;
   flex-direction: column;
@@ -596,6 +605,7 @@ details pre {
 }
 
 .scene-item {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
@@ -625,6 +635,7 @@ details pre {
 }
 
 .remote-item {
+  position: relative;
   display: grid;
   gap: 2px;
   padding: 11px 12px;
@@ -653,6 +664,58 @@ details pre {
   border-radius: 8px;
   color: var(--muted);
   text-align: center;
+}
+
+.orderable {
+  outline: 1px dashed rgba(8, 124, 113, 0.45);
+  outline-offset: 2px;
+  cursor: grab;
+}
+
+.orderable.dragging {
+  opacity: 0.55;
+}
+
+.orderable.drag-over {
+  outline-color: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(46, 100, 181, 0.16), var(--shadow);
+}
+
+.order-controls {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.order-controls button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent-2);
+  font-weight: 700;
+  line-height: 1;
+}
+
+body.reorder-mode .sensor-card,
+body.reorder-mode .control-card,
+body.reorder-mode .device-card {
+  padding-top: 44px;
+}
+
+body.reorder-mode .scene-item,
+body.reorder-mode .remote-item {
+  padding-right: 78px;
+}
+
+body.reorder-mode .scene-item .order-controls {
+  right: 56px;
 }
 
 @media (max-width: 920px) {
