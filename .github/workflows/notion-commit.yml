@@ -43,6 +43,7 @@ jobs:
             }
             const repo = context.repo.repo;
             const commits = context.payload.commits || [];
+            const createdIds = [];
             core.info(`Sending ${commits.length} commit(s) to Notion`);
             for (const c of commits) {
               const en = ((c.message || '').split('\n')[0] || c.id).slice(0, 200);
@@ -65,13 +66,15 @@ jobs:
               if (!resp.ok) {
                 core.warning(`Notion API failed for ${c.id.slice(0, 7)}: ${resp.status} ${await resp.text()}`);
               } else {
+                const created = await resp.json();
+                if (created && created.id) createdIds.push(created.id);
                 core.info(`Logged ${c.id.slice(0, 7)}: ${ja}`);
               }
             }
             const KEEP = 90;
             if (appId) {
               try {
-                const ids = [];
+                const ids = [...createdIds];
                 let cursor = undefined, more = true;
                 while (more) {
                   const qb = {
@@ -85,7 +88,9 @@ jobs:
                   });
                   if (!qr.ok) { core.warning('reorder query failed: ' + qr.status); break; }
                   const qj = await qr.json();
-                  for (const pg of (qj.results || [])) ids.push(pg.id);
+                  for (const pg of (qj.results || [])) {
+                    if (!ids.includes(pg.id)) ids.push(pg.id);
+                  }
                   more = qj.has_more; cursor = qj.next_cursor;
                 }
                 if (ids.length > KEEP) {
@@ -112,4 +117,3 @@ jobs:
                 core.warning('reorder failed: ' + e);
               }
             }
-
