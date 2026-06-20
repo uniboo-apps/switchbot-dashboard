@@ -954,8 +954,9 @@ body.reorder-mode .scene-item .order-controls {
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: 8px;
     padding: 6px 0 12px;
   }
@@ -975,9 +976,18 @@ body.reorder-mode .scene-item .order-controls {
   }
 
   .toolbar {
-    width: 100%;
+    width: auto;
     gap: 6px;
+    grid-column: 2;
+    grid-row: 1;
     justify-content: flex-end;
+    padding-top: 2px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+    padding-right: 6px;
   }
 
   .settings-overlay {
