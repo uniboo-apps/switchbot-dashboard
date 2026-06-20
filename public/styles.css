@@ -274,8 +274,8 @@ h2 {
 /* パネルボード：環境・操作・リモコン等を1つの並べ替え可能なグリッドに。 */
 .panel-board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 14px;
   align-items: start;
 }
 
@@ -300,8 +300,8 @@ h2 {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .section-kicker {
@@ -341,23 +341,23 @@ h2 {
 
 .device-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
 }
 
 .sensor-highlights {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
 }
 
 .sensor-card {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  min-height: 124px;
-  padding: 14px;
+  gap: 10px;
+  min-height: 102px;
+  padding: 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -366,8 +366,8 @@ h2 {
 
 .sensor-badge {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border-radius: 50%;
   background: #e3f4ef;
@@ -395,12 +395,12 @@ h2 {
   display: block;
   margin-top: 2px;
   overflow-wrap: anywhere;
-  font-size: 1.55rem;
+  font-size: 1.38rem;
   line-height: 1.05;
 }
 
 .sensor-name {
-  margin-top: 7px;
+  margin-top: 5px;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.82rem;
@@ -412,14 +412,14 @@ h2 {
   display: flex;
   grid-column: 1 / -1;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .sensor-meta span,
 .state-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 21px;
   max-width: 100%;
   padding: 0 8px;
   border-radius: 999px;
@@ -432,18 +432,18 @@ h2 {
 .control-list,
 .remote-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .controls-panel .control-list {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .control-card {
   position: relative;
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 9px;
+  padding: 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -485,16 +485,16 @@ h2 {
 .control-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .device-card {
   position: relative;
   display: flex;
-  min-height: 224px;
+  min-height: 188px;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 9px;
+  padding: 11px;
   box-shadow: var(--shadow);
 }
 
@@ -542,12 +542,12 @@ h2 {
 .quick-values {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 6px;
 }
 
 .value-tile {
-  min-height: 60px;
-  padding: 10px;
+  min-height: 50px;
+  padding: 8px;
   border-radius: 8px;
   background: var(--surface-2);
 }
@@ -560,22 +560,22 @@ h2 {
 
 .value-tile strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   overflow-wrap: anywhere;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  min-height: 34px;
+  gap: 6px;
+  min-height: 30px;
 }
 
 .actions button,
 .scene-item button,
 .control-actions button {
-  min-height: 34px;
+  min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -584,7 +584,7 @@ h2 {
 
 .actions button,
 .control-actions button {
-  padding: 0 10px;
+  padding: 0 9px;
 }
 
 /* 単発アクション（押す等）はアクセント枠で示す。状態の「点灯」とは別扱い。 */
@@ -658,16 +658,16 @@ details pre {
 .scene-list,
 .event-log {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .scene-item {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 10px;
+  padding: 8px;
   border-radius: 8px;
   background: var(--surface-2);
 }
@@ -677,7 +677,7 @@ details pre {
 }
 
 .scene-item button {
-  width: 40px;
+  width: 34px;
   padding: 0;
   color: var(--accent-2);
 }
@@ -694,8 +694,8 @@ details pre {
 .remote-item {
   position: relative;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -721,12 +721,12 @@ details pre {
 .remote-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .remote-actions button {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -829,26 +829,195 @@ body.reorder-mode .scene-item .order-controls {
 
 @media (max-width: 700px) {
   .app-shell {
-    width: min(100% - 20px, 1180px);
-    padding-top: 12px;
+    width: min(100% - 12px, 1180px);
+    padding: 8px 0 24px;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+    gap: 8px;
+    padding: 6px 0 12px;
+  }
+
+  h1 {
+    font-size: 1.3rem;
+  }
+
+  h2 {
+    font-size: 0.98rem;
+  }
+
+  .status-meta {
+    gap: 4px;
+    margin-top: 3px;
+    font-size: 0.72rem;
   }
 
   .toolbar {
     width: 100%;
+    gap: 6px;
     justify-content: flex-end;
+  }
+
+  .icon-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .icon-button span {
+    font-size: 1.05rem;
+  }
+
+  .panel-board {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .panel-heading {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .section-kicker {
+    font-size: 0.62rem;
   }
 
   .segmented {
     width: 100%;
+    padding: 2px;
   }
 
   .segmented button {
     min-width: 0;
+    min-height: 28px;
+    font-size: 0.78rem;
+  }
+
+  .sensor-highlights,
+  .device-list,
+  .controls-panel .control-list,
+  .remote-list,
+  .scene-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .sensor-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .sensor-badge {
+    display: none;
+  }
+
+  .sensor-label,
+  .value-tile span,
+  .device-type,
+  .control-heading div > span,
+  .remote-heading span {
+    font-size: 0.66rem;
+  }
+
+  .sensor-value {
+    font-size: 1.08rem;
+  }
+
+  .sensor-name {
+    margin-top: 3px;
+    font-size: 0.68rem;
+  }
+
+  .sensor-meta {
+    gap: 3px;
+  }
+
+  .sensor-meta span,
+  .state-pill,
+  .pill {
+    min-height: 19px;
+    padding: 0 6px;
+    font-size: 0.64rem;
+  }
+
+  .control-card,
+  .device-card,
+  .remote-item {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .device-card {
+    min-height: 0;
+  }
+
+  .card-top,
+  .control-heading,
+  .remote-heading {
+    gap: 6px;
+  }
+
+  .card-top h3,
+  .control-heading strong,
+  .remote-heading strong,
+  .scene-item strong {
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+
+  .pill {
+    max-width: 72px;
+  }
+
+  .quick-values {
+    gap: 4px;
+  }
+
+  .value-tile {
+    min-height: 42px;
+    padding: 6px;
+  }
+
+  .value-tile strong {
+    font-size: 0.88rem;
+  }
+
+  .actions,
+  .control-actions,
+  .remote-actions {
+    gap: 4px;
+  }
+
+  .actions button,
+  .scene-item button,
+  .control-actions button,
+  .remote-actions button {
+    min-height: 28px;
+    border-radius: 7px;
+    font-size: 0.78rem;
+  }
+
+  .actions button,
+  .control-actions button,
+  .remote-actions button {
+    padding: 0 7px;
+  }
+
+  .scene-item {
+    min-height: 40px;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .scene-item button {
+    width: 30px;
+  }
+
+  details {
+    display: none;
   }
 
   .login-row {

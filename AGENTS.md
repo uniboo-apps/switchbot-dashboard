@@ -17,6 +17,11 @@ npm start
 
 ブラウザで `http://localhost:8091` を開く。
 
+## デプロイ
+
+- コード変更後は確認なしに `git commit & push` する（main → Cloudflare Pages 自動デプロイ）。
+- コミットメッセージは ASCII で書く。
+
 ## API 方針
 
 - SwitchBot API v1.1 を使う。
